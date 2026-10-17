@@ -1,10 +1,7 @@
-// Infinite Chess — static server + WebSocket relay for LAN rooms (no extra packages needed)
-// Run:  node server.js   (change port: PORT=8080 node server.js)
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto'), os = require('os');
 const PORT = +process.env.PORT || 3000, ROOT = fs.existsSync(path.join(__dirname, 'public')) ? path.join(__dirname, 'public') : __dirname;
 const MIME = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.wasm':'application/wasm','.png':'image/png','.mp3':'audio/mpeg','.json':'application/json'};
 
-// COOP/COEP headers enable cross-origin isolation => multi-threaded Stockfish works on http://localhost
 const srv = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]); if (p === '/') p = '/index.html';
   const f = path.join(ROOT, path.normalize(p));
@@ -17,7 +14,6 @@ const srv = http.createServer((req, res) => {
   });
 });
 
-// ---- Minimal WebSocket (RFC 6455) ----
 const rooms = new Map();
 const send = (c, o) => { const d = Buffer.from(JSON.stringify(o));
   const h = d.length < 126 ? Buffer.from([0x81, d.length]) : Buffer.from([0x81, 126, d.length >> 8, d.length & 255]);
