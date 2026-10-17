@@ -145,7 +145,7 @@ function f4Init(o){const S=o.seats;
  bad=[];rips=[];caps=[];shake=null;f4g=null;f4pinch=null;f4p.clear();flip=false;Vw.cx=6.5;Vw.cy=6.5;Vw.s=Math.max(16,Math.min(60,Math.min(W-16,H_-150)/14.5));F4selected=null;F4legal=[];F4mode=true;VR='4p';mode='4p';over=null;sel=null;clk=null;thinking=false;sfAbort();
  document.body.classList.add('f4');chatVis();f4Refresh()}
 function f4Exit(){if(F4)clearTimeout(F4.bt);F4mode=false;F4=null;document.body.classList.remove('f4');$('#p4').hidden=true}
-function f4put(x,y,c,t){F4.board.set(F4key(x,y),{x,y,c,t})}
+function f4put(x,y,c,t){F4.board.set(F4key(x,y),{x,y,c,t,moved:false})}
 function f4At(x,y){return F4.board.get(F4key(x,y))}
 function f4Pseudo(p){const out=[],add=(x,y,dx,dy,slide)=>{for(let n=0;n<40;n++){const q=f4At(x,y);if(!q)out.push({x,y,cap:false});else{if(q.c!==p.c)out.push({x,y,cap:true});break}if(!slide)break;x+=dx;y+=dy}};
  const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]],dirs=p.t==='rook'?O:p.t==='bishop'?D:p.t==='queen'||p.t==='king'?[...O,...D]:[];
@@ -154,22 +154,43 @@ function f4Pseudo(p){const out=[],add=(x,y,dx,dy,slide)=>{for(let n=0;n<40;n++){
  if(p.t==='pawn'){const[dx,dy]=F4DIR[p.c],x=p.x+dx,y=p.y+dy;if(F4valid(x,y)&&!f4At(x,y)){out.push({x,y,cap:false});const x2=x+dx,y2=y+dy;if(F4START[p.c](p)&&F4valid(x2,y2)&&!f4At(x2,y2))out.push({x:x2,y:y2,cap:false})}
   for(const[ax,ay]of[[dx+dy,dy-dx],[dx-dy,dy+dx]]){const xx=p.x+ax,yy=p.y+ay,q=F4valid(xx,yy)&&f4At(xx,yy);if(q&&q.c!==p.c)out.push({x:xx,y:yy,cap:true})}}
  return out}
+/* ---- rules: you may not leave your own king capturable; castling; no legal move = out ---- */
+function f4InCheck(c){const k=[...F4.board.values()].find(q=>q.t==='king'&&q.c===c);if(!k)return false;
+ for(const q of F4.board.values())if(q.c!==c&&F4.alive.includes(q.c)&&f4Pseudo(q).some(m=>m.cap&&m.x===k.x&&m.y===k.y))return true;return false}
+function f4Sim(p,m,fn){const ox=p.x,oy=p.y,cap=F4.board.get(F4key(m.x,m.y)),rk=m.rook,rx0=rk&&rk.x,ry0=rk&&rk.y;
+ F4.board.delete(F4key(ox,oy));p.x=m.x;p.y=m.y;F4.board.set(F4key(m.x,m.y),p);
+ if(rk){F4.board.delete(F4key(rx0,ry0));rk.x=m.rx;rk.y=m.ry;F4.board.set(F4key(rk.x,rk.y),rk)}
+ let r;try{r=fn()}finally{
+  if(rk){F4.board.delete(F4key(rk.x,rk.y));rk.x=rx0;rk.y=ry0;F4.board.set(F4key(rx0,ry0),rk)}
+  F4.board.delete(F4key(m.x,m.y));p.x=ox;p.y=oy;F4.board.set(F4key(ox,oy),p);if(cap)F4.board.set(F4key(m.x,m.y),cap)}
+ return r}
+function f4Castles(p){const out=[];if(p.t!=='king'||p.moved||f4InCheck(p.c))return out;const h=p.c==='red'||p.c==='yellow';
+ for(const r of F4.board.values()){if(r.t!=='rook'||r.c!==p.c||r.moved||(h?r.y!==p.y:r.x!==p.x))continue;
+  const d=Math.sign(h?r.x-p.x:r.y-p.y),n=Math.abs(h?r.x-p.x:r.y-p.y);let ok=n>=3;
+  for(let i=1;i<n&&ok;i++)if(f4At(p.x+(h?d*i:0),p.y+(h?0:d*i)))ok=false;if(!ok)continue;
+  const x1=p.x+(h?d:0),y1=p.y+(h?0:d);
+  if(!f4Sim(p,{x:x1,y:y1},()=>!f4InCheck(p.c)))continue;
+  out.push({x:p.x+(h?2*d:0),y:p.y+(h?0:2*d),cap:false,castle:true,long:n>3,rook:r,rx:x1,ry:y1})}
+ return out}
+function f4Legal(p){return[...f4Pseudo(p),...f4Castles(p)].filter(m=>f4Sim(p,m,()=>!f4InCheck(p.c)))}
+function f4Settle(){let n=0;while(F4&&!F4.over&&n++<4){if([...F4.board.values()].some(p=>p.c===F4.cur&&f4Legal(p).length))break;f4Elim(F4.cur,f4InCheck(F4.cur)?'was checkmated':'is stalemated')}}
 const f4Next=()=>{let i=F4COL.indexOf(F4.cur);do{i=(i+1)%4}while(!F4.alive.includes(F4COL[i]));F4.cur=F4COL[i]};
 function f4Elim(c,why){if(!F4.alive.includes(c))return;F4.alive=F4.alive.filter(x=>x!==c);toast(F4.names[c]+' '+why);
  if(F4.alive.length<=1){F4.over=true;F4.winner=F4.alive[0]||null;f4End()}else if(F4.cur===c)f4Next()}
 function f4End(){const w=F4.winner;setTimeout(()=>{if(F4&&F4.over){play('game-end');dlg(`<h2>${w?esc(F4.names[w])+' wins!':'Game over'}</h2><p>${w&&w===F4.me?'You won this game.':'The game has ended.'}</p><div class=sg>${F4.online?(F4.host?'<button class=pb data-a=rematch>Play again</button>':''):'<button class=pb data-a=new>New game</button>'}<button data-a=${F4.online?'new':'x'}>${F4.online?'Main menu':'View board'}</button>${F4.online?'<button data-a=x>View board</button>':''}</div>${F4.online&&!F4.host?'<p>Waiting for the host to start another game…</p>':''}`)}},700)}
-function f4Move(p,x,y,remote,na){if(!F4||!p||F4.over||p.c!==F4.cur)return false;const m=f4Pseudo(p).find(a=>a.x===x&&a.y===y);if(!m)return false;
+function f4Move(p,x,y,remote,na){if(!F4||!p||F4.over||p.c!==F4.cur)return false;const m=f4Legal(p).find(a=>a.x===x&&a.y===y);if(!m)return false;
  const fx=p.x,fy=p.y,q=f4At(x,y),now=performance.now(),d=na||NA()?0:240;f4Tick();
  if(F4.online&&!remote&&WS){const o={t:'move4',fx,fy,tx:x,ty:y};if(F4.bots.has(p.c))o.bot=p.c;WS.send(JSON.stringify(o))}
- if(q)caps.push({c:q.c,t:q.t,x:q.x,y:q.y,t0:now+d*.6});p.an={fx,fy,t0:now,d};F4.board.delete(F4key(fx,fy));p.x=x;p.y=y;
+ if(q)caps.push({c:q.c,t:q.t,x:q.x,y:q.y,t0:now+d*.6});p.an={fx,fy,t0:now,d};F4.board.delete(F4key(fx,fy));p.x=x;p.y=y;p.moved=true;
+ if(m.castle){const rk=m.rook;rk.an={fx:rk.x,fy:rk.y,t0:now,d};F4.board.delete(F4key(rk.x,rk.y));rk.x=m.rx;rk.y=m.ry;rk.moved=true;F4.board.set(F4key(rk.x,rk.y),rk)}
  if(p.t==='pawn'&&(p.c==='red'&&y>=9||p.c==='yellow'&&y<=4||p.c==='blue'&&x>=9||p.c==='green'&&x<=4))p.t='queen';
- F4.board.set(F4key(x,y),p);F4.hist.push({c:p.c,s:sq4(fx,fy)+(q?'x':'-')+sq4(x,y)});F4.last={fx,fy,tx:x,ty:y};F4selected=null;F4legal=[];
+ F4.board.set(F4key(x,y),p);F4.hist.push({c:p.c,s:m.castle?(m.long?'O-O-O':'O-O'):sq4(fx,fy)+(q?'x':'-')+sq4(x,y)});F4.last={fx,fy,tx:x,ty:y};F4selected=null;F4legal=[];
  if(q)F4.score[p.c]+=q.t==='king'?0:F4V[q.t];if(q&&q.t==='king')f4Elim(q.c,'was eliminated');
  if(!F4.over)f4Next();f4Threat();const ck=F4.threat.length>0&&!F4.over;if(ck)f4ChkT=now+d;
  setTimeout(()=>play(ck?'move-check':q?'capture':remote||F4.bots.has(p.c)?'move-opponent':'move-self'),d*.7);f4Refresh();return true}
 const F4V={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:100};
 function f4BotMove(){if(!F4||F4.over||!F4.bots.has(F4.cur)||F4.online&&!F4.host)return;const c=F4.cur,
- all=[...F4.board.values()].filter(p=>p.c===c).flatMap(p=>f4Pseudo(p).map(m=>({p,m,s:(m.cap?F4V[f4At(m.x,m.y).t]*10:0)+Math.random()*6+(p.t==='pawn'?1:0)})));
+ all=[...F4.board.values()].filter(p=>p.c===c).flatMap(p=>f4Legal(p).map(m=>({p,m,s:(m.cap?F4V[f4At(m.x,m.y).t]*10:0)+(m.castle?4:0)+Math.random()*6+(p.t==='pawn'?1:0)})));
  if(!all.length){f4Elim(c,'has no moves left');f4Refresh();return}all.sort((a,b)=>b.s-a.s);const k=all[0];f4Move(k.p,k.m.x,k.m.y)}
 function f4BotKick(){if(!F4)return;clearTimeout(F4.bt);if(F4.over||!F4.bots.has(F4.cur)||F4.online&&!F4.host)return;const id=F4.id;F4.bt=setTimeout(()=>F4&&F4.id===id&&f4BotMove(),650)}
 function f4Resign(c,why,remote){if(!F4||F4.over||!F4.alive.includes(c))return;if(F4.online&&!remote&&WS)WS.send(JSON.stringify({t:'resign4',color:c}));f4Elim(c,why||'resigned');f4Refresh()}
@@ -177,7 +198,7 @@ function f4Tick(){if(!F4||!F4.clk||F4.over)return;const n=performance.now(),d=n-
  if(F4.clk[c]<=0&&(!F4.online||F4.host))f4Resign(c,'ran out of time');f4Clocks()}
 setInterval(f4Tick,100);
 function f4Clocks(){if(!F4)return;for(const r of $('#p4').children){const c=r.dataset.c,b=r.querySelector('b');b.textContent=F4.clk?fmt(F4.clk[c]):'';r.classList.toggle('low',!!F4.clk&&F4.alive.includes(c)&&F4.clk[c]<10000)}}
-function f4Refresh(){f4Threat();f4UI();f4BotKick();req()}
+function f4Refresh(){f4Settle();f4Threat();f4UI();f4BotKick();req()}
 function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('th');st.classList.toggle('ck',!!(F4.threat&&F4.threat.length)&&!F4.over);
  const t=$('#stt');t.textContent=F4.over?(F4.winner?F4.names[F4.winner]+' wins':'Game over'):(c===F4.me?'Your turn':F4.names[c]+"'s turn")+(F4.threat&&F4.threat.length&&!F4.over?' · CHECK!':'');t.style.color=F4HEX[F4.over&&F4.winner?F4.winner:c];
  $('.tn').style.background=F4.over?'transparent':F4HEX[c];$('#eng').style.display='none';$('#clk').hidden=true;
@@ -187,7 +208,7 @@ function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('th
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
 /* piece sprites: the folder is resources/pieces/4playeschess (older copies used 4playerchess, so both are tried).
    The SVGs only have a viewBox, which Firefox/Safari can't draw on a canvas, so a size is added when they load. */
-const F4DIRS=['4playerschess','4playerschess'],F4IM={};
+const F4DIRS=['4playeschess','4playerchess'],F4IM={};
 function f4Load(im,c,t,i){fetch(`${R}pieces/${F4DIRS[i]}/${c}/${t}.svg`).then(r=>{if(!r.ok)throw 0;return r.text()}).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{if(i<F4DIRS.length-1)f4Load(im,c,t,i+1)})}
 for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image();im.onload=()=>req();F4IM[c+t]=im;f4Load(im,c,t,0)}
 const F4LET={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
@@ -242,7 +263,7 @@ function f4Down(e){drawer(false);cv.setPointerCapture(e.pointerId);f4p.set(e.poi
  const now=performance.now(),[wx,wy]=s2w(e.clientX,e.clientY),[x,y]=f4u(Math.floor(wx),Math.floor(wy)),p=F4&&f4At(x,y);
  f4g={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy,mv:0,p:null,was:false,drag:false,px:e.clientX,py:e.clientY};
  if(!NA())rips.push({x,y,t0:now});
- if(f4Mine(p)){f4g.was=F4selected===p;if(!f4g.was){F4selected=p;F4legal=f4Pseudo(p);selT=now}f4g.p=p}
+ if(f4Mine(p)){f4g.was=F4selected===p;if(!f4g.was){F4selected=p;F4legal=f4Legal(p);selT=now}f4g.p=p}
  else if(p&&F4.online&&!F4.over&&p.c===F4.me&&F4.cur!==F4.me){play('illegal');toast('Wait for your turn')}
  req()}
 function f4Mv(e){if(f4p.has(e.pointerId))f4p.set(e.pointerId,{x:e.clientX,y:e.clientY});
