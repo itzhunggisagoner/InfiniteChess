@@ -186,7 +186,7 @@ function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('ck
  f4Clocks();
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
 /* the SVGs only have a viewBox (no width/height); Firefox/Safari can't draw those on a canvas, so load the text and add a size */
-const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image(),u=`${R}pieces/4playerchess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im;
+const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image(),u=`${R}pieces/4playerschess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im;
  fetch(u).then(r=>r.text()).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{im.src=u})}
 const F4LET={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
 /* infinite board: the original cross is drawn normally, everything around it is open (slightly darker) ground */
