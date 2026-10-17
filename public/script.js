@@ -142,7 +142,7 @@ function f4Init(o){const S=o.seats;
   clk:o.tc?Object.fromEntries(F4COL.map(c=>[c,o.tc*1000])):null,tk:performance.now()};
  const back=['rook','knight','bishop','queen','king','bishop','knight','rook'];
  for(let i=0;i<8;i++){const x=3+i;f4put(x,0,'red',back[i]);f4put(x,1,'red','pawn');f4put(x,13,'yellow',back[i]);f4put(x,12,'yellow','pawn');f4put(0,x,'blue',back[7-i]);f4put(1,x,'blue','pawn');f4put(13,x,'green',back[i]);f4put(12,x,'green','pawn')}
- flip=false;Vw.cx=6.5;Vw.cy=6.5;Vw.s=Math.max(16,Math.min(60,Math.min(W-16,H_-150)/14.5));F4selected=null;F4legal=[];F4mode=true;VR='4p';mode='4p';over=null;sel=null;clk=null;thinking=false;sfAbort();
+ bad=[];rips=[];caps=[];shake=null;f4g=null;f4pinch=null;f4p.clear();flip=false;Vw.cx=6.5;Vw.cy=6.5;Vw.s=Math.max(16,Math.min(60,Math.min(W-16,H_-150)/14.5));F4selected=null;F4legal=[];F4mode=true;VR='4p';mode='4p';over=null;sel=null;clk=null;thinking=false;sfAbort();
  document.body.classList.add('f4');chatVis();f4Refresh()}
 function f4Exit(){if(F4)clearTimeout(F4.bt);F4mode=false;F4=null;document.body.classList.remove('f4');$('#p4').hidden=true}
 function f4put(x,y,c,t){F4.board.set(F4key(x,y),{x,y,c,t})}
@@ -158,15 +158,15 @@ const f4Next=()=>{let i=F4COL.indexOf(F4.cur);do{i=(i+1)%4}while(!F4.alive.inclu
 function f4Elim(c,why){if(!F4.alive.includes(c))return;F4.alive=F4.alive.filter(x=>x!==c);toast(F4.names[c]+' '+why);
  if(F4.alive.length<=1){F4.over=true;F4.winner=F4.alive[0]||null;f4End()}else if(F4.cur===c)f4Next()}
 function f4End(){const w=F4.winner;setTimeout(()=>{if(F4&&F4.over){play('game-end');dlg(`<h2>${w?esc(F4.names[w])+' wins!':'Game over'}</h2><p>${w&&w===F4.me?'You won this game.':'The game has ended.'}</p><div class=sg>${F4.online?(F4.host?'<button class=pb data-a=rematch>Play again</button>':''):'<button class=pb data-a=new>New game</button>'}<button data-a=${F4.online?'new':'x'}>${F4.online?'Main menu':'View board'}</button>${F4.online?'<button data-a=x>View board</button>':''}</div>${F4.online&&!F4.host?'<p>Waiting for the host to start another game…</p>':''}`)}},700)}
-function f4Move(p,x,y,remote){if(!F4||!p||F4.over||p.c!==F4.cur)return false;const m=f4Pseudo(p).find(a=>a.x===x&&a.y===y);if(!m)return false;
- const fx=p.x,fy=p.y,q=f4At(x,y);f4Tick();
+function f4Move(p,x,y,remote,na){if(!F4||!p||F4.over||p.c!==F4.cur)return false;const m=f4Pseudo(p).find(a=>a.x===x&&a.y===y);if(!m)return false;
+ const fx=p.x,fy=p.y,q=f4At(x,y),now=performance.now(),d=na||NA()?0:240;f4Tick();
  if(F4.online&&!remote&&WS){const o={t:'move4',fx,fy,tx:x,ty:y};if(F4.bots.has(p.c))o.bot=p.c;WS.send(JSON.stringify(o))}
- F4.board.delete(F4key(fx,fy));p.x=x;p.y=y;
+ if(q)caps.push({c:q.c,t:q.t,x:q.x,y:q.y,t0:now+d*.6});p.an={fx,fy,t0:now,d};F4.board.delete(F4key(fx,fy));p.x=x;p.y=y;
  if(p.t==='pawn'&&(p.c==='red'&&y>=9||p.c==='yellow'&&y<=4||p.c==='blue'&&x>=9||p.c==='green'&&x<=4))p.t='queen';
  F4.board.set(F4key(x,y),p);F4.hist.push({c:p.c,s:sq4(fx,fy)+(q?'x':'-')+sq4(x,y)});F4.last={fx,fy,tx:x,ty:y};F4selected=null;F4legal=[];
- play(q?'capture':remote||F4.bots.has(p.c)?'move-opponent':'move-self');
  if(q)F4.score[p.c]+=q.t==='king'?0:F4V[q.t];if(q&&q.t==='king')f4Elim(q.c,'was eliminated');
- if(!F4.over)f4Next();f4Refresh();return true}
+ if(!F4.over)f4Next();f4Threat();const ck=F4.threat.length>0&&!F4.over;if(ck)f4ChkT=now+d;
+ setTimeout(()=>play(ck?'move-check':q?'capture':remote||F4.bots.has(p.c)?'move-opponent':'move-self'),d*.7);f4Refresh();return true}
 const F4V={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:100};
 function f4BotMove(){if(!F4||F4.over||!F4.bots.has(F4.cur)||F4.online&&!F4.host)return;const c=F4.cur,
  all=[...F4.board.values()].filter(p=>p.c===c).flatMap(p=>f4Pseudo(p).map(m=>({p,m,s:(m.cap?F4V[f4At(m.x,m.y).t]*10:0)+Math.random()*6+(p.t==='pawn'?1:0)})));
@@ -177,43 +177,83 @@ function f4Tick(){if(!F4||!F4.clk||F4.over)return;const n=performance.now(),d=n-
  if(F4.clk[c]<=0&&(!F4.online||F4.host))f4Resign(c,'ran out of time');f4Clocks()}
 setInterval(f4Tick,100);
 function f4Clocks(){if(!F4)return;for(const r of $('#p4').children){const c=r.dataset.c,b=r.querySelector('b');b.textContent=F4.clk?fmt(F4.clk[c]):'';r.classList.toggle('low',!!F4.clk&&F4.alive.includes(c)&&F4.clk[c]<10000)}}
-function f4Refresh(){f4UI();f4BotKick();req()}
-function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('ck','th');
- const t=$('#stt');t.textContent=F4.over?(F4.winner?F4.names[F4.winner]+' wins':'Game over'):c===F4.me?'Your turn':F4.names[c]+"'s turn";t.style.color=F4HEX[F4.over&&F4.winner?F4.winner:c];
+function f4Refresh(){f4Threat();f4UI();f4BotKick();req()}
+function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('th');st.classList.toggle('ck',!!(F4.threat&&F4.threat.length)&&!F4.over);
+ const t=$('#stt');t.textContent=F4.over?(F4.winner?F4.names[F4.winner]+' wins':'Game over'):(c===F4.me?'Your turn':F4.names[c]+"'s turn")+(F4.threat&&F4.threat.length&&!F4.over?' · CHECK!':'');t.style.color=F4HEX[F4.over&&F4.winner?F4.winner:c];
  $('.tn').style.background=F4.over?'transparent':F4HEX[c];$('#eng').style.display='none';$('#clk').hidden=true;
  const p=$('#p4');p.hidden=false;
  p.innerHTML=F4COL.map(k=>`<div class="pr${k===c&&!F4.over?' act':''}${F4.alive.includes(k)?'':' out'}" data-c="${k}"><i style="background:${F4HEX[k]}"></i><span class=pn style="color:${F4HEX[k]}">${esc(F4.names[k])}${k===F4.me?' •':''}</span>${F4.bots.has(k)?'<em>bot</em>':''}${F4.score[k]?`<em class=sc>+${F4.score[k]}</em>`:''}<b></b></div>`).join('');
  f4Clocks();
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
-/* the SVGs only have a viewBox (no width/height); Firefox/Safari can't draw those on a canvas, so load the text and add a size */
-const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image(),u=`${R}pieces/4playerschess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im;
- fetch(u).then(r=>r.text()).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{im.src=u})}
+/* piece sprites: the folder is resources/pieces/4playeschess (older copies used 4playerchess, so both are tried).
+   The SVGs only have a viewBox, which Firefox/Safari can't draw on a canvas, so a size is added when they load. */
+const F4DIRS=['4playeschess','4playerchess'],F4IM={};
+function f4Load(im,c,t,i){fetch(`${R}pieces/${F4DIRS[i]}/${c}/${t}.svg`).then(r=>{if(!r.ok)throw 0;return r.text()}).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{if(i<F4DIRS.length-1)f4Load(im,c,t,i+1)})}
+for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image();im.onload=()=>req();F4IM[c+t]=im;f4Load(im,c,t,0)}
 const F4LET={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
-/* infinite board: the original cross is drawn normally, everything around it is open (slightly darker) ground */
-const f4inCross=(x,y)=>x>=0&&x<14&&y>=0&&y<14&&(x>=3&&x<=10||y>=3&&y<=10);
-function f4Draw(){g.fillStyle='#11171a';g.fillRect(0,0,W,H_);if(!F4)return;const s=Vw.s,L=F4.last,
- c1=s2w(0,0),c2=s2w(W,H_),x0=Math.floor(Math.min(c1[0],c2[0])),x1=Math.ceil(Math.max(c1[0],c2[0])),y0=Math.floor(Math.min(c1[1],c2[1])),y1=Math.ceil(Math.max(c1[1],c2[1]));
- for(let vy=y0;vy<=y1;vy++)for(let vx=x0;vx<=x1;vx++){const[x,y]=f4u(vx,vy),[rx,ry]=rect(vx,vy);
-  g.fillStyle=(x+y)&1?'#6b8b80':'#d4dfd4';g.fillRect(rx,ry,s+.6,s+.6);
-  if(L&&(x===L.fx&&y===L.fy||x===L.tx&&y===L.ty)){g.fillStyle='rgba(255,214,64,.42)';g.fillRect(rx,ry,s,s)}
-  if(F4selected&&F4selected.x===x&&F4selected.y===y){g.fillStyle='#f3d45b99';g.fillRect(rx,ry,s,s)}
-  const lm=F4legal.find(m=>m.x===x&&m.y===y);if(lm){g.fillStyle=lm.cap?'#df515b99':'#17251e66';g.beginPath();g.arc(rx+s/2,ry+s/2,s*(lm.cap?.42:.16),0,7);g.fill()}}
- for(const p of F4.board.values()){const[vx,vy]=f4v(p.x,p.y);if(vx<x0-1||vx>x1+1||vy<y0-1||vy>y1+1)continue;const[rx,ry]=rect(vx,vy),im=F4IM[p.c+p.t];
-  if(im&&im.complete&&im.naturalWidth)g.drawImage(im,rx+s*.05,ry+s*.05,s*.9,s*.9);
-  else{g.fillStyle=F4HEX[p.c];g.beginPath();g.arc(rx+s/2,ry+s/2,s*.38,0,7);g.fill();g.fillStyle='#10161a';g.font=`700 ${s*.42}px system-ui`;g.textAlign='center';g.textBaseline='middle';g.fillText(F4LET[p.t],rx+s/2,ry+s/2+1);g.textBaseline='alphabetic'}}}
-/* input: tap = select / move, drag = pan, pinch / wheel = zoom */
+/* a king is "in check" when an enemy piece could capture it right now */
+function f4Threat(){F4.threat=[];if(!F4||F4.over)return;const k=[...F4.board.values()].find(p=>p.t==='king'&&p.c===F4.cur);if(!k)return;
+ for(const q of F4.board.values())if(q.c!==F4.cur&&F4.alive.includes(q.c)&&f4Pseudo(q).some(m=>m.cap&&m.x===k.x&&m.y===k.y))F4.threat.push(q)}
+const f4Mine=q=>!!q&&!!F4&&!F4.over&&q.c===F4.cur&&(F4.online?q.c===F4.me:!F4.bots.has(q.c));
+let f4ind=[],f4ChkT=0;
+function f4Nope(p,x,y){play('illegal');bad.push({x,y,t0:performance.now()});if(p)shake={p,t0:performance.now()};F4selected=null;F4legal=[];req()}
+function f4Draw(){const now=performance.now();g.fillStyle='#11171a';g.fillRect(0,0,W,H_);if(!F4)return false;
+ let busy=false;const s=Vw.s,L=F4.last,[LT,DK]=TH[CFG.th],
+ c1=s2w(0,0),c2=s2w(W,H_),x0=Math.floor(Math.min(c1[0],c2[0])),x1=Math.ceil(Math.max(c1[0],c2[0])),y0=Math.floor(Math.min(c1[1],c2[1])),y1=Math.ceil(Math.max(c1[1],c2[1])),
+ hl=(x,y,col)=>{const[a,b]=f4v(x,y),[rx,ry]=rect(a,b);g.fillStyle=col;g.fillRect(rx,ry,s,s)};
+ for(let vy=y0;vy<=y1;vy++)for(let vx=x0;vx<=x1;vx++){const[x,y]=f4u(vx,vy),[rx,ry]=rect(vx,vy);g.fillStyle=(x+y)&1?LT:DK;g.fillRect(rx,ry,s+.7,s+.7)}
+ if(L){hl(L.fx,L.fy,'rgba(255,214,64,.42)');hl(L.tx,L.ty,'rgba(255,214,64,.5)')}
+ if(F4selected){const e=Math.min(1,(now-selT)/160);if(e<1)busy=true;hl(F4selected.x,F4selected.y,`rgba(255,214,64,${.62*ez(e)})`)}
+ for(const b of bad){const t=(now-b.t0)/520;if(t<1){busy=true;const k=t<.5?1:2*(1-t),[a,c]=f4v(b.x,b.y),[rx,ry]=rect(a,c);g.fillStyle=`rgba(229,57,64,${.78*k*(.6+.4*Math.abs(Math.cos(t*Math.PI*3)))})`;g.fillRect(rx,ry,s,s)}}bad=bad.filter(b=>now-b.t0<520);
+ /* king under attack */
+ const K=F4.threat&&F4.threat.length&&!F4.over&&[...F4.board.values()].find(p=>p.t==='king'&&p.c===F4.cur);
+ if(K){const[a,c]=f4v(K.x,K.y),[rx,ry]=rect(a,c),cx=rx+s/2,cy=ry+s/2,e=Math.min(1,Math.max(0,(now-f4ChkT)/300));if(e<1)busy=true;
+  g.fillStyle=`rgba(229,57,64,${.88*ez(e)})`;g.fillRect(rx,ry,s,s);const gr=g.createRadialGradient(cx,cy,0,cx,cy,s*.7);gr.addColorStop(0,'rgba(255,40,40,.95)');gr.addColorStop(1,'rgba(200,0,0,0)');g.fillStyle=gr;g.fillRect(rx,ry,s,s);
+  const t=(now-f4ChkT)/900;if(t>=0&&t<1){busy=true;g.strokeStyle=`rgba(255,70,70,${.85*(1-t)})`;g.lineWidth=3;g.beginPath();g.arc(cx,cy,s*(.5+t*1.3),0,7);g.stroke()}
+  g.strokeStyle='rgba(229,57,64,.75)';g.lineWidth=3;g.setLineDash([8,6]);for(const q of F4.threat){const[b,d]=f4v(q.x,q.y),[qx,qy]=w2s(b+.5,d+.5);g.beginPath();g.moveTo(qx,qy);g.lineTo(cx,cy);g.stroke()}g.setLineDash([])}
+ /* legal moves pop in */
+ if(F4selected&&!F4.over)for(const m of F4legal){const[a,c]=f4v(m.x,m.y),[rx,ry]=rect(a,c),cx=rx+s/2,cy=ry+s/2;if(cx<-s||cy<-s||cx>W+s||cy>H_+s)continue;
+  const dl=Math.min(140,Math.max(Math.abs(m.x-F4selected.x),Math.abs(m.y-F4selected.y))*14),t=Math.max(0,Math.min(1,(now-selT-dl)/180));if(t<1)busy=true;const k=NA()?1:eb(t);
+  g.beginPath();if(m.cap){g.strokeStyle='rgba(0,0,0,.28)';g.lineWidth=s*.09;g.arc(cx,cy,s*.46*k,0,7);g.stroke()}else{g.fillStyle='rgba(0,0,0,.22)';g.arc(cx,cy,s*.17*k,0,7);g.fill()}}
+ const dp=(c,t,vx,vy,k,al)=>{const[rx,ry]=rect(vx,vy),im=F4IM[c+t];g.globalAlpha=al;
+  if(im&&im.complete&&im.naturalWidth)g.drawImage(im,rx-s*(k-1)/2+s*.05*k,ry-s*(k-1)/2+s*.05*k,s*k*.9,s*k*.9);
+  else{g.fillStyle=F4HEX[c];g.beginPath();g.arc(rx+s/2,ry+s/2,s*.38*k,0,7);g.fill();g.fillStyle='#10161a';g.font=`700 ${s*.42*k}px system-ui`;g.textAlign='center';g.textBaseline='middle';g.fillText(F4LET[t],rx+s/2,ry+s/2+1);g.textBaseline='alphabetic'}g.globalAlpha=1};
+ for(const q of caps){const t=(now-q.t0)/260,[a,c]=f4v(q.x,q.y);if(t<0){dp(q.c,q.t,a,c,1,1);busy=true}else if(t<1){busy=true;dp(q.c,q.t,a,c,1-.5*ez(t),1-ez(t))}}caps=caps.filter(q=>now-q.t0<260);
+ const mv=[];for(const p of F4.board.values()){const[a,c]=f4v(p.x,p.y);if(a<x0-1||a>x1+1||c<y0-1||c>y1+1)continue;
+  if(p.an&&now-p.an.t0<p.an.d){mv.push(p);busy=true;continue}p.an=null;
+  let k=1,wx=a;if(p===F4selected){const e=Math.min(1,(now-selT)/180);k=1+.1*eb(e)}
+  if(shake&&shake.p===p){const t=(now-shake.t0)/350;if(t<1){wx+=Math.sin(t*Math.PI*7)*.09*(1-t);busy=true}else shake=null}
+  dp(p.c,p.t,wx,c,k,f4g&&f4g.drag&&f4g.p===p?.3:1)}
+ for(const p of mv){const e=ez((now-p.an.t0)/p.an.d),[a0,b0]=f4v(p.an.fx,p.an.fy),[a1,b1]=f4v(p.x,p.y);dp(p.c,p.t,a0+(a1-a0)*e,b0+(b1-b0)*e,1.06,1)}
+ for(const r of rips){const t=(now-r.t0)/480;if(t<1){busy=true;const[a,c]=f4v(r.x,r.y),[rx,ry]=rect(a,c);g.strokeStyle=`rgba(255,255,255,${.55*(1-t)})`;g.lineWidth=2.5;g.beginPath();g.arc(rx+s/2,ry+s/2,s*(.15+.45*ez(t)),0,7);g.stroke()}}rips=rips.filter(r=>now-r.t0<480);
+ if(f4g&&f4g.drag){const im=F4IM[f4g.p.c+f4g.p.t],z=s*1.18;if(im.naturalWidth)g.drawImage(im,f4g.px-z/2,f4g.py-z/2-s*.1,z,z);busy=true}
+ {const vg=g.createRadialGradient(W/2,H_/2,Math.min(W,H_)*.35,W/2,H_/2,Math.hypot(W,H_)*.6);vg.addColorStop(0,'rgba(8,14,18,0)');vg.addColorStop(1,'rgba(8,14,18,.36)');g.fillStyle=vg;g.fillRect(0,0,W,H_)}
+ /* arrows to kings that are off-screen */
+ f4ind=[];if(!homeOn)for(const k of F4.board.values()){if(k.t!=='king'||!F4.alive.includes(k.c))continue;const[a,c]=f4v(k.x,k.y),[kx,ky]=w2s(a+.5,c+.5);if(kx>-s&&kx<W+s&&ky>-s&&ky<H_+s)continue;
+  const dx=kx-W/2,dy=ky-H_/2,t=Math.min((W/2-34)/Math.abs(dx||1e-9),(H_/2-34)/Math.abs(dy||1e-9)),ex=W/2+dx*t,ey=H_/2+dy*t;
+  g.beginPath();g.arc(ex,ey,21,0,7);g.fillStyle=F4.cur===k.c&&K?'#e5393f':'rgba(20,27,31,.9)';g.fill();g.strokeStyle=F4HEX[k.c];g.lineWidth=3;g.stroke();
+  const im=F4IM[k.c+'king'];if(im.naturalWidth)g.drawImage(im,ex-15,ey-15,30,30);f4ind.push({x:ex,y:ey,vx:a+.5,vy:c+.5})}
+ return busy}
+/* input: tap / drag a piece to move, drag the board to pan, pinch / wheel to zoom */
 const f4p=new Map();let f4g=null,f4pinch=null;
 function f4Down(e){drawer(false);cv.setPointerCapture(e.pointerId);f4p.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(f4p.size===2){f4g=null;const[a,b]=[...f4p.values()];f4pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:Vw.s};return}
- f4g={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy,mv:0}}
+ for(const k of f4ind)if(Math.hypot(e.clientX-k.x,e.clientY-k.y)<22){fly(k.vx,k.vy);return}
+ const now=performance.now(),[wx,wy]=s2w(e.clientX,e.clientY),[x,y]=f4u(Math.floor(wx),Math.floor(wy)),p=F4&&f4At(x,y);
+ f4g={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy,mv:0,p:null,was:false,drag:false,px:e.clientX,py:e.clientY};
+ if(!NA())rips.push({x,y,t0:now});
+ if(f4Mine(p)){f4g.was=F4selected===p;if(!f4g.was){F4selected=p;F4legal=f4Pseudo(p);selT=now}f4g.p=p}
+ else if(p&&F4.online&&!F4.over&&p.c===F4.me&&F4.cur!==F4.me){play('illegal');toast('Wait for your turn')}
+ req()}
 function f4Mv(e){if(f4p.has(e.pointerId))f4p.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(f4pinch&&f4p.size===2){const[a,b]=[...f4p.values()];Vw.s=Math.max(14,Math.min(140,f4pinch.s*Math.hypot(a.x-b.x,a.y-b.y)/f4pinch.d));req();return}
- if(!f4g)return;f4g.mv=Math.max(f4g.mv,Math.hypot(e.clientX-f4g.x,e.clientY-f4g.y));if(f4g.mv>6){Vw.cx=f4g.cx-(e.clientX-f4g.x)/Vw.s;Vw.cy=f4g.cy+(e.clientY-f4g.y)/Vw.s;req()}}
-function f4Up(e){f4p.delete(e.pointerId);if(f4pinch){if(f4p.size<2)f4pinch=null;f4g=null;return}if(f4g&&f4g.mv<=6)f4Tap(e);f4g=null}
-function f4Tap(e){if(!F4||F4.over)return;const[wx,wy]=s2w(e.clientX,e.clientY),[x,y]=f4u(Math.floor(wx),Math.floor(wy)),p=f4At(x,y),
- mine=q=>q&&q.c===F4.cur&&(F4.online?q.c===F4.me:!F4.bots.has(q.c));
- if(F4selected){if(f4Move(F4selected,x,y))return;if(mine(p)){F4selected=p;F4legal=f4Pseudo(p)}else{F4selected=null;F4legal=[]}}
- else if(mine(p)){F4selected=p;F4legal=f4Pseudo(p)}
+ if(!f4g)return;f4g.mv=Math.max(f4g.mv,Math.hypot(e.clientX-f4g.x,e.clientY-f4g.y));
+ if(f4g.p){f4g.px=e.clientX;f4g.py=e.clientY;if(f4g.mv>8)f4g.drag=true}else if(f4g.mv>6){Vw.cx=f4g.cx-(e.clientX-f4g.x)/Vw.s;Vw.cy=f4g.cy+(e.clientY-f4g.y)/Vw.s}req()}
+function f4Up(e){f4p.delete(e.pointerId);if(f4pinch){if(f4p.size<2)f4pinch=null;f4g=null;return}const G=f4g;f4g=null;if(!G||!F4)return;
+ const[wx,wy]=s2w(e.clientX,e.clientY),[x,y]=f4u(Math.floor(wx),Math.floor(wy));
+ if(G.p){if(G.drag){if(!(x===G.p.x&&y===G.p.y)&&!f4Move(G.p,x,y,false,true))f4Nope(G.p,x,y)}else if(G.was&&G.mv<=6){F4selected=null;F4legal=[]}}
+ else if(G.mv<=6&&F4selected&&!(x===F4selected.x&&y===F4selected.y)){if(!f4Move(F4selected,x,y))f4Nope(F4selected,x,y)}
+ else if(G.mv<=6&&F4selected){F4selected=null;F4legal=[]}
  req()}
 
 /* ======================= ONLINE ROOMS ======================= */
@@ -378,7 +418,7 @@ cv.onpointerup=cv.onpointercancel=e=>{if(F4mode&&!homeOn){f4Up(e);return}ptr.del
  down=null;req()};
 cv.onwheel=e=>{e.preventDefault();const b=s2w(e.clientX,e.clientY);Vw.s=Math.max(14,Math.min(140,Vw.s*Math.exp(-e.deltaY*.0015)));const a=s2w(e.clientX,e.clientY);Vw.cx+=b[0]-a[0];Vw.cy+=b[1]-a[1];req()};
 addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlg').classList.contains('open'))closeDlg();else if($('#dr').classList.contains('open'))drawer(false);else if(homeOn&&hasGame())closeHome(true);else sel=null;req()}});
-function draw(now){if(F4mode){f4Draw();return false}if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Math.max(saveV.s,60)*1.1;Vw.cx=saveV.cx+Math.sin(t*.13)*2.6;Vw.cy=saveV.cy+Math.cos(t*.1)*1.8}
+function draw(now){if(F4mode)return f4Draw();if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Math.max(saveV.s,60)*1.1;Vw.cx=saveV.cx+Math.sin(t*.13)*2.6;Vw.cy=saveV.cy+Math.cos(t*.1)*1.8}
  const s=Vw.s;let busy=homeOn;const[LT,DK]=TH[CFG.th];
  const c1=s2w(0,0),c2=s2w(W,H_),x0=Math.floor(Math.min(c1[0],c2[0])),x1=Math.ceil(Math.max(c1[0],c2[0])),y0=Math.floor(Math.min(c1[1],c2[1])),y1=Math.ceil(Math.max(c1[1],c2[1]));
  g.fillStyle='#11171a';g.fillRect(0,0,W,H_);

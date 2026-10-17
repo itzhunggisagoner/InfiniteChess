@@ -179,3 +179,15 @@ body.f4 .di[data-k=undo],body.f4 .di[data-k=flip],body.noch .di[data-k=chat]{dis
 .room small{opacity:.65}.room b{letter-spacing:.1em;font-variant-numeric:tabular-nums}
 
 .chat-msg b{font-size:12px;font-weight:700}
+
+/* translucent glass for every 4-player / online element (same look as the tiles) */
+body.f4 .gl{background:rgba(255,255,255,.1);backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);border-color:rgba(255,255,255,.28)}
+body.f4 #st.ck{background:rgba(229,72,77,.55)}
+.seat,.room,.mini,.ni,.chat-msg,.chat-form input,.chat-head button{backdrop-filter:var(--bl);-webkit-backdrop-filter:var(--bl)}
+.seat,.room{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.22)}
+.ni,.chat-form input{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.22)}
+.chat-msg{background:rgba(255,255,255,.12)}.chat-msg.self{background:rgba(127,216,191,.3)}
+.mini{background:rgba(255,255,255,.14)}
+#p4 .pr.act{background:rgba(127,216,191,.28)}
+body.f4 #p4,body.f4 #st{text-shadow:0 1px 3px rgba(0,0,0,.75),0 0 8px rgba(0,0,0,.35)}
+body.f4 .tn{box-shadow:0 0 0 1px rgba(0,0,0,.35)}
