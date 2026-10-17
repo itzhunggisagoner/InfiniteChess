@@ -1,7 +1,3 @@
-// Infinite Chess — Cloudflare Worker
-// 1) Serves the game files (with COOP/COEP headers so multi-threaded Stockfish can run)
-// 2) /ws: online rooms — a Durable Object ("Hub") pairs two players by a 4-digit room code
-
 const RELAY = new Set(['start', 'move', 'resign']);   // messages forwarded straight to the opponent
 
 export class Hub {
