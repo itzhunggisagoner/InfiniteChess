@@ -8,8 +8,7 @@ const CFG={th:0,snd:true,vol:.8,coords:true,anim:true};
 try{Object.assign(CFG,JSON.parse(localStorage.getItem('icfg')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('icfg',JSON.stringify(CFG))}catch(e){}};
 const IM={};for(const c of'wb')for(const t of'kqrbnp'){const im=new Image();im.onload=()=>req();im.src=`${R}pieces/${c==='w'?'white':'black'}_${PN[t]}.png`;IM[c+t]=im}
-// 7 effects: capture, castle, illegal, move-check, move-opponent, move-self, tensecondsremain
-const SN=['capture','castle','illegal','move-check','move-opponent','move-self','tensecondsremain'];
+const SN=['capture','castle','illegal','move-check','move-opponent','move-self','tensecondsremain','game-start','game-end'];
 let AC=null,ai=0;const AB={},AE={};
 function audioInit(){if(ai)return;ai=1;try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){AC=null}
  for(const k of SN){const u=`${R}sounds/${k}.mp3`,a=new Audio(u);a.preload='auto';AE[k]=a;if(AC)fetch(u).then(r=>r.arrayBuffer()).then(b=>AC.decodeAudioData(b)).then(b=>AB[k]=b).catch(()=>{})}}
@@ -18,66 +17,8 @@ function play(n){if(!CFG.snd)return;audioInit();if(AC&&AC.state==='suspended')AC
  if(AC&&AB[n]){const s2=AC.createBufferSource(),g2=AC.createGain();s2.buffer=AB[n];g2.gain.value=CFG.vol;s2.connect(g2).connect(AC.destination);s2.start()}
  else if(AE[n]){const a=AE[n].cloneNode();a.volume=CFG.vol;a.play().catch(()=>{})}}
 
-/* ======================= ENGINE (infinite-board rules + built-in bot) ======================= */
-const KY=(x,y)=>x*4194304+y,opp=c=>c==='w'?'b':'w',V0={p:100,n:300,b:320,r:500,q:900,k:0};
-const ND=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]],OR=[[1,0],[-1,0],[0,1],[0,-1]],DG=[[1,1],[1,-1],[-1,1],[-1,-1]],DIRS={r:OR,b:DG,q:[...OR,...DG]};
-class Pos{constructor(){this.m=new Map();this.turn='w';this.ep=null;this.k={};this.hm=0}get(x,y){return this.m.get(KY(x,y))}put(p){this.m.set(KY(p.x,p.y),p)}del(p){this.m.delete(KY(p.x,p.y))}}
-function setup(){const P=new Pos(),B='rnbqkbnr';for(let x=0;x<8;x++)for(const[c,y,t]of[['w',0,B[x]],['w',1,'p'],['b',7,B[x]],['b',6,'p']]){const p={t,c,x,y,moved:false};P.put(p);if(t==='k')P.k[c]=p}return P}
-function firstBlock(P,x,y,dx,dy){let k=Infinity,pc=null;for(const q of P.m.values()){const a=q.x-x,b=q.y-y,n=dx?a/dx:b/dy;if(n>0&&n<k&&a===n*dx&&b===n*dy){k=n;pc=q}}return[k,pc]}
-function atk(P,q,x,y){const a=x-q.x,b=y-q.y,A_=Math.abs(a),B_=Math.abs(b);if(!a&&!b)return false;
- if(q.t==='n')return a*a+b*b===5;if(q.t==='k')return A_<2&&B_<2;if(q.t==='p')return A_===1&&b===(q.c==='w'?1:-1);
- const d=q.t==='b'?A_===B_:q.t==='r'?(!a||!b):(!a||!b||A_===B_);if(!d)return false;
- return firstBlock(P,q.x,q.y,Math.sign(a),Math.sign(b))[0]>=Math.max(A_,B_)}
-const attackedBy=(P,x,y,c)=>{for(const q of P.m.values())if(q.c===c&&atk(P,q,x,y))return true;return false};
-const inCheck=(P,c)=>attackedBy(P,P.k[c].x,P.k[c].y,opp(c));
-function pm(P,p,tx,ty){const a=tx-p.x,b=ty-p.y,q=P.get(tx,ty);if(!a&&!b||q&&q.c===p.c)return null;const mv={p,fx:p.x,fy:p.y,tx,ty,cap:q||null};
- if(p.t==='p'){const d=p.c==='w'?1:-1;
-  if(!a){if(q)return null;if(b===d)return mv;if(b===2*d&&!p.moved&&!P.get(p.x,p.y+d)){mv.dbl=1;return mv}return null}
-  if(Math.abs(a)===1&&b===d){if(q)return mv;const e=P.ep;if(e&&e.x===tx&&e.y===ty){mv.cap=P.get(tx,p.y);return mv}}return null}
- if(p.t==='k'){if(Math.abs(a)<2&&Math.abs(b)<2)return mv;
-  if(!p.moved&&!b&&Math.abs(a)===2){const s=Math.sign(a),r=P.get(s>0?7:0,p.y);if(!r||r.t!=='r'||r.c!==p.c||r.moved)return null;
-   for(let x=p.x+s;x!==r.x;x+=s)if(P.get(x,p.y))return null;const o=opp(p.c);if(attackedBy(P,p.x,p.y,o)||attackedBy(P,p.x+s,p.y,o))return null;
-   mv.rk=r;mv.rfx=r.x;mv.rx=p.x+s;return mv}return null}
- return atk(P,p,tx,ty)?mv:null}
-function make(P,mv){const p=mv.p,u={mv,pm:p.moved,ep:P.ep,hm:P.hm};if(mv.cap)P.del(mv.cap);P.del(p);p.x=mv.tx;p.y=mv.ty;p.moved=true;P.put(p);
- if(mv.rk){const r=mv.rk;u.rm=r.moved;P.del(r);r.x=mv.rx;r.moved=true;P.put(r)}
- P.ep=mv.dbl?{x:mv.tx,y:(mv.fy+mv.ty)/2}:null;P.hm=(mv.cap||p.t==='p')?0:P.hm+1;P.turn=opp(P.turn);return u}
-function unmake(P,u){const mv=u.mv,p=mv.p;P.del(p);p.x=mv.fx;p.y=mv.fy;p.moved=u.pm;P.put(p);if(mv.cap)P.put(mv.cap);
- if(mv.rk){const r=mv.rk;P.del(r);r.x=mv.rfx;r.moved=u.rm;P.put(r)}P.ep=u.ep;P.hm=u.hm;P.turn=opp(P.turn)}
-function legal(P,mv){const c=mv.p.c,u=make(P,mv),ok=!inCheck(P,c);unmake(P,u);return ok}
-function evade(P,c){const k=P.k[c],o=opp(c),L=[];
- for(const[a,b]of[...OR,...DG]){const m=pm(P,k,k.x+a,k.y+b);if(m&&legal(P,m))L.push(m)}
- const ch=[...P.m.values()].filter(q=>q.c===o&&atk(P,q,k.x,k.y));if(ch.length>1)return L;
- const q=ch[0],T=[[q.x,q.y]];if('brq'.includes(q.t)){const dx=Math.sign(k.x-q.x),dy=Math.sign(k.y-q.y),n=Math.max(Math.abs(k.x-q.x),Math.abs(k.y-q.y));for(let s=1;s<n;s++)T.push([q.x+dx*s,q.y+dy*s])}
- if(P.ep)T.push([P.ep.x,P.ep.y]);
- for(const p of[...P.m.values()])if(p.c===c&&p!==k)for(const[x,y]of T){const m=pm(P,p,x,y);if(m&&legal(P,m))L.push(m)}return L}
-function gen(P,c,cap,co,only){
- if(inCheck(P,c)){const L=evade(P,c);return co?L.filter(m=>m.cap):only?L.filter(m=>m.p===only):L}
- const L=[],add=(p,x,y)=>{const m=pm(P,p,x,y);if(m&&!(co&&!m.cap))L.push(m)};
- for(const p of P.m.values()){if(p.c!==c||only&&p!==only)continue;
-  if(p.t==='n')for(const[a,b]of ND)add(p,p.x+a,p.y+b);
-  else if(p.t==='k'){for(const[a,b]of[...OR,...DG])add(p,p.x+a,p.y+b);if(!co&&!p.moved){add(p,p.x+2,p.y);add(p,p.x-2,p.y)}}
-  else if(p.t==='p'){const d=c==='w'?1:-1;add(p,p.x,p.y+d);add(p,p.x,p.y+2*d);add(p,p.x+1,p.y+d);add(p,p.x-1,p.y+d)}
-  else for(const[dx,dy]of DIRS[p.t]){const[k,q]=firstBlock(P,p.x,p.y,dx,dy);
-   if(!co)for(let s=1;s<k&&s<=cap;s++)L.push({p,fx:p.x,fy:p.y,tx:p.x+dx*s,ty:p.y+dy*s,cap:null});
-   if(q&&q.c!==c)L.push({p,fx:p.x,fy:p.y,tx:q.x,ty:q.y,cap:q})}}
- return L.filter(m=>legal(P,m))}
-function ev(P){let s=0;for(const p of P.m.values()){const sg=p.c==='w'?1:-1,e=P.k[opp(p.c)],dk=Math.max(Math.abs(p.x-e.x),Math.abs(p.y-e.y));let v=V0[p.t];
- if(p.t==='p')v+=Math.max(-2,Math.min((p.y-(sg>0?1:6))*sg,6))*8;
- else if(p.t==='n'||p.t==='b')v+=(p.moved?12:0)+Math.max(0,10-dk)*2;
- else if(p.t==='r'||p.t==='q')v+=Math.max(0,12-dk)*1.5;
- else v-=Math.min(Math.abs(p.y-(sg>0?0:7)),6)*10-(p.moved&&(p.x===2||p.x===6)?25:0);
- s+=sg*v}return s}
-let TO=0,DL=0;const mvs=m=>m.cap?V0[m.cap.t]*10-V0[m.p.t]:0,order=L=>L.sort((a,b)=>mvs(b)-mvs(a));
-function qs(P,c,a,b,d){const st=(c==='w'?1:-1)*ev(P);if(st>=b||d<=0)return st;if(st>a)a=st;
- for(const m of order(gen(P,c,0,true))){const u=make(P,m),v=-qs(P,opp(c),-b,-a,d-1);unmake(P,u);if(v>=b)return b;if(v>a)a=v}return a}
-function ab(P,c,dp,a,b,ply){if(performance.now()>DL){TO=1;return 0}if(dp<=0)return qs(P,c,a,b,3);
- const L=order(gen(P,c,3));if(!L.length)return inCheck(P,c)?-99000+ply:0;
- for(const m of L){const u=make(P,m),v=-ab(P,opp(c),dp-1,-b,-a,ply+1);unmake(P,u);if(TO)return 0;if(v>=b)return b;if(v>a)a=v}return a}
-function think(P,c,lv){const D=[1,2,3][lv]+(lv===2?1:0);DL=performance.now()+[200,900,2300][lv];TO=0;let L=order(gen(P,c,6)),best=L[0];
- for(let d=1;d<=D;d++){let bm=null,bs=-1e9,a=-1e9;
-  for(const m of L){const u=make(P,m);let v=-ab(P,opp(c),d-1,-1e9,-a,1);unmake(P,u);if(TO)break;v+=Math.random()*(lv===0?120:4);if(v>bs){bs=v;bm=m}if(v>a)a=v}
-  if(TO||!bm)break;best=bm;L=[bm,...L.filter(x=>x!==bm)]}return best}
+/* ======================= ENGINE: see engine.js (rules + built-in bot, also runs in a Web Worker) ======================= */
+
 /* ======================= STOCKFISH ======================= */
 const LV=[{ms:250,elo:1350},{ms:600,elo:1900},{ms:1100,elo:2500},{ms:1600,elo:0}];
 const SF_URL=R+'stockfish-19-lite/stockfish-19-lite.js';
@@ -88,7 +29,7 @@ function sfInit(){
  // The multi-threaded lite build needs SharedArrayBuffer => the page must be cross-origin isolated (COOP/COEP headers)
  if(!globalThis.Worker||typeof SharedArrayBuffer==='undefined'||!globalThis.crossOriginIsolated)return sfDie();
  try{setTimeout(()=>{if(!sfReady&&!sfFail)sfDie()},20000);SF=new Worker(SF_URL);
-  SF.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';if(l==='uciok')SF.postMessage('isready');else if(l==='readyok'){sfReady=true;stt()}
+  SF.onmessage=e=>{const l=typeof e.data==='string'?e.data:'';if(l==='uciok')SF.postMessage('isready');else if(l==='readyok'){if(!sfReady){SF.postMessage('setoption name Threads value 1');SF.postMessage('setoption name Hash value 16')}sfReady=true;stt()}
    else if(l.startsWith('bestmove')){sfPend--;if(!sfPend&&sfCb)sfCb(l.split(' ')[1])}};
   SF.onerror=sfDie;SF.postMessage('uci')}catch(e){sfDie()}}
 const fits=P=>{for(const p of P.m.values())if(p.x<0||p.x>7||p.y<0||p.y>7||p.t==='p'&&(p.y===0||p.y===7))return false;return true};
@@ -97,19 +38,27 @@ function fen(P){let s='';for(let y=7;y>=0;y--){let e=0;for(let x=0;x<8;x++){cons
  const cr=(w[0]?'K':'')+(w[1]?'Q':'')+(b[0]?'k':'')+(b[1]?'q':'')||'-',ep=P.ep&&P.ep.x>=0&&P.ep.x<8&&P.ep.y>=0&&P.ep.y<8?sqn(P.ep.x,P.ep.y):'-';
  return`${s} ${P.turn} ${cr} ${ep} ${P.hm} 1`}
 function sfThink(P,c,lv){return new Promise(res=>{const mp=new Map();
- for(const m of gen(P,c,16)){if(m.tx<0||m.tx>7||m.ty<0||m.ty>7||m.p.t==='p'&&(m.ty===7||m.ty===0))continue;mp.set(sqn(m.fx,m.fy)+sqn(m.tx,m.ty),m)}
+ for(const m of gen(P,c,7)){if(m.tx<0||m.tx>7||m.ty<0||m.ty>7||m.p.t==='p'&&(m.ty===7||m.ty===0))continue;mp.set(sqn(m.fx,m.fy)+sqn(m.tx,m.ty),m)}
  if(!mp.size)return res(null);const L=LV[lv];let done=0;
  const fin=m=>{if(!done){done=1;clearTimeout(tm);sfCb=null;res(m)}},tm=setTimeout(()=>{SF.postMessage('stop');fin(null)},L.ms+7000);sfCb=b=>fin(mp.get(b)||null);
  SF.postMessage('setoption name UCI_LimitStrength value '+(L.elo?'true':'false'));if(L.elo)SF.postMessage('setoption name UCI_Elo value '+L.elo);
  SF.postMessage('position fen '+fen(P));sfPend++;SF.postMessage(`go movetime ${L.ms} searchmoves ${[...mp.keys()].join(' ')}`)})}
-const sfAbort=()=>{if(SF&&sfCb){sfCb=null;SF.postMessage('stop')}};
+const sfAbort=()=>{intAbort();if(SF&&sfCb){sfCb=null;SF.postMessage('stop')}};
+let IW=null,iwId=0;
+function intAbort(){if(IW){try{IW.terminate()}catch(e){}IW=null}}
+function intThink(P,c,lv){let w=IW;if(!w&&globalThis.Worker){try{w=IW=new Worker('engine.js')}catch(e){w=IW=null}}
+ if(!w)return new Promise(r=>setTimeout(()=>r(think(P,c,Math.min(lv,1))),80));
+ return new Promise(res=>{const id=++iwId,ws=w;
+  ws.onmessage=e=>{if(e.data.id!==id)return;const d=e.data.m,p=d&&P.get(d.fx,d.fy),m=p&&pm(P,p,d.tx,d.ty);res(m&&legal(P,m)?m:null)};
+  ws.onerror=()=>{if(IW===ws)intAbort();res(think(P,c,Math.min(lv,1)))};
+  ws.postMessage({id,lv,turn:P.turn,ep:P.ep,hm:P.hm,pcs:[...P.m.values()].map(q=>({t:q.t,c:q.c,x:q.x,y:q.y,mv:q.moved}))})})}
 
 /* ======================= GAME STATE ======================= */
 const fl=x=>x>=0&&x<8?'abcdefgh'[x]:`(${x+1})`,sq=(x,y)=>fl(x)+(y+1),RM0=matchMedia('(prefers-reduced-motion:reduce)').matches,ez=t=>1-Math.pow(1-t,3),eb=t=>{const c=1.9;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
 const TH=[['#ebecd0','#739552','Green'],['#f0d9b5','#b58863','Wood'],['#dfe5e8','#7f97a6','Slate'],['#f3e3e0','#c98a8a','Rose'],['#e9e4f1','#8672a8','Purple'],['#b8c0c8','#46525e','Night']],
  NA=()=>RM0||!CFG.anim,LVN=[['Easy','Elo 1350'],['Medium','Elo 1900'],['Hard','Elo 2500'],['Max','Strongest']],TCS=[[0,'No limit'],[3,'3 min'],[5,'5 min'],[10,'10 min']];
 let P,H=[],mode='2p',me='w',lv=1,over=null,sel=null,flip=false,thinking=false,last=null,chk=[],gid=0,W,H_,ind=[],engUsed='',sfNote=false;
-let selT=0,chkT=0,caps=[],rips=[],shake=null,clk=null,warned={w:0,b:0};const Vw={cx:4,cy:4,s:60};
+let selT=0,chkT=0,caps=[],rips=[],bad=[],shake=null,clk=null,warned={w:0,b:0};const Vw={cx:4,cy:4,s:60};
 function san(mv){const p=mv.p;if(mv.rk)return mv.tx>mv.fx?'O-O':'O-O-O';let s='';
  if(p.t!=='p'){s=p.t.toUpperCase();const am=[...P.m.values()].filter(q=>q!==p&&q.c===p.c&&q.t===p.t&&(m=>m&&legal(P,m))(pm(P,q,mv.tx,mv.ty)));
   if(am.length)s+=am.some(q=>q.x===p.x)?(am.some(q=>q.y===p.y)?sq(p.x,p.y):p.y+1):fl(p.x)}else if(mv.cap)s=fl(p.x);
@@ -130,7 +79,7 @@ function doMove(mv,anim,remote){tickClock();const now=performance.now(),d=anim&&
  const o=[...P.m.values()].filter(p=>p.t!=='k');
  if(!has)over=ck?{w:mover,r:'Checkmate!'}:{w:null,r:'Stalemate — draw'};
  else if(P.hm>=100)over={w:null,r:'Draw (50-move rule)'};else if(!o.length||o.length===1&&'nb'.includes(o[0].t))over={w:null,r:'Draw (insufficient material)'};
- refresh(ck&&!has)}
+ refresh(!!over)}
 const nm=c=>c==='w'?'White':'Black';
 function stt(){const st=$('#st');if(!P)return;st.classList.toggle('ck',!!chk.length&&!over);st.classList.toggle('th',thinking);
  $('#stt').textContent=over?over.r+(over.w?' — '+nm(over.w)+' wins':''):thinking?'Engine is thinking…':(mode==='lan'?(P.turn===me?'Your move':'Opponent\'s move'):nm(P.turn)+' to move')+(chk.length?' — CHECK!':'');
@@ -139,14 +88,15 @@ function stt(){const st=$('#st');if(!P)return;st.classList.toggle('ck',!!chk.len
 function refresh(matePlayed){chk=[];if(inCheck(P,P.turn)){const k=P.k[P.turn];chk=[...P.m.values()].filter(q=>q.c!==P.turn&&atk(P,q,k.x,k.y))}
  const mv=$('#mvl');mv.innerHTML=H.length?'':'<div class=e>No moves yet.</div>';for(let i=0;i<H.length;i+=2)mv.insertAdjacentHTML('beforeend',`<div class=r><b>${i/2+1}.</b><span>${H[i].s}</span><span>${H[i+1]?H[i+1].s:''}</span></div>`);
  if(mv.lastElementChild&&mv.lastElementChild.className==='r')mv.lastElementChild.className='r n';mv.scrollTop=1e9;stt();req();const id=gid;
- if(over){if(!matePlayed)play('move-check');setTimeout(()=>id===gid&&dlg(`<h2>${over.r}</h2><p>${over.w?(mode==='2p'?nm(over.w):over.w===me?'You':mode==='lan'?'Your opponent':'The engine')+(mode==='2p'||over.w!==me?' wins':' win')+' this game.':'The game ended in a draw.'}</p><div class=sg><button class=pb data-a=new>New game</button><button data-a=x>View board</button></div>`),900);return}
+ if(over){if(!over.s){over.s=1;const gi=gid;setTimeout(()=>gi===gid&&play('game-end'),matePlayed?650:0)}setTimeout(()=>id===gid&&dlg(`<h2>${over.r}</h2><p>${over.w?(mode==='2p'?nm(over.w):over.w===me?'You':mode==='lan'?'Your opponent':'The engine')+(mode==='2p'||over.w!==me?' wins':' win')+' this game.':'The game ended in a draw.'}</p><div class=sg><button class=pb data-a=new>New game</button><button data-a=x>View board</button></div>`),900);return}
  if(mode==='bot'&&P.turn!==me&&!thinking)botTurn(id)}
 async function botTurn(id){thinking=true;stt();let m=null;
  if(sfReady&&fits(P)){m=await sfThink(P,P.turn,lv);if(m)engUsed='sf'}
- if(!m){await new Promise(r=>setTimeout(r,80));if(id!==gid)return;m=think(P,P.turn,Math.min(lv,2));engUsed='int'}
+ if(!m){m=await intThink(P,P.turn,Math.min(lv,2));if(id!==gid)return;engUsed='int'}
  if(id!==gid)return;thinking=false;if(m)doMove(m,true);else refresh()}
-function tryMove(p,x,y,byDrag){if(x===p.x&&y===p.y)return;const m=pm(P,p,x,y);if(!m)return;
- if(!legal(P,m)){play('illegal');toast('That move would leave your king in check');shake={p,t0:performance.now()};req();return}doMove(m,!byDrag)}
+function nope(p,x,y,msg){play('illegal');bad.push({x,y,t0:performance.now()});if(msg){toast(msg);shake={p,t0:performance.now()}}req()}
+function tryMove(p,x,y,byDrag){if(x===p.x&&y===p.y)return;const m=pm(P,p,x,y);if(!m)return nope(p,x,y);
+ if(!legal(P,m))return nope(p,x,y,'That move would leave your king in check');doMove(m,!byDrag)}
 const canPlay=p=>!over&&!thinking&&p.c===P.turn&&(mode==='2p'||p.c===me);
 function undo(){if(!H.length||thinking||over&&mode==='lan')return;if(mode==='lan'||clk)return toast('Undo isn\'t available in online games or with a clock');
  const n=mode==='bot'&&P.turn===me&&H.length>=2?2:1;sfAbort();for(let i=0;i<n;i++)unmake(P,H.pop().u);
@@ -223,7 +173,7 @@ function renderHome(step){const h=$('#hin');let x='';hs.step=step;
  h.className='';h.innerHTML=x;void h.offsetWidth;h.className='in';$('#home').scrollTop=0}
 function openHome(step){if(!homeOn)saveV={cx:Vw.cx,cy:Vw.cy,s:Vw.s};homeOn=true;document.body.classList.add('lobby');drawer(false);$('#home').classList.add('open');renderHome(step||'main');drawClock();req()}
 function closeHome(restore){homeOn=false;document.body.classList.remove('lobby');$('#home').classList.remove('open');if(restore&&saveV)Object.assign(Vw,saveV);if(clk)clk.last=performance.now();drawClock();req()}
-function startGame(o){closeDlg();closeHome(false);if(o.mode!=='lan')lanClose();newGame(o);play('move-self')}
+function startGame(o){closeDlg();closeHome(false);if(o.mode!=='lan')lanClose();newGame(o);play('game-start')}
 function lanFail(){const e=$('#lerr');const t='Couldn\'t reach the game server. Please try again in a moment.';if(e)e.textContent=t;toast(t)}
 $('#home').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
  if(d.s){if(hs.step==='lanw'||hs.step==='lanwj')lanClose();renderHome(d.s)}
@@ -256,10 +206,12 @@ addEventListener('resize',fit);
 function fly(x,y){const sx=Vw.cx,sy=Vw.cy,t0=performance.now();(function st(t){const e=ez(Math.min(1,(t-t0)/450));Vw.cx=sx+(x-sx)*e;Vw.cy=sy+(y-sy)*e;req();if(e<1)requestAnimationFrame(st)})(t0)}
 let drag=null,pan=null,pinch=null,down=null,moved=0,wasSel=false;const ptr=new Map();
 const select=p=>{sel=p;selT=performance.now()};
+let mc=null;function selMoves(cap){cap=Math.ceil(cap/16)*16;if(!mc||mc.p!==sel||mc.n!==H.length||mc.g!==gid||mc.cap<cap)mc={p:sel,n:H.length,g:gid,cap,L:gen(P,sel.c,cap,false,sel)};return mc.L}
 cv.onpointerdown=e=>{drawer(false);cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptr.size===2){drag=pan=null;const[a,b]=[...ptr.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:Vw.s};return}
  for(const k of ind)if(Math.hypot(e.clientX-k.x,e.clientY-k.y)<22){fly(k.p.x+.5,k.p.y+.5);return}
- const[wx,wy]=s2w(e.clientX,e.clientY),x=Math.floor(wx),y=Math.floor(wy),p=P.get(x,y);moved=0;down={x:e.clientX,y:e.clientY};wasSel=false;
+ const[wx,wy]=s2w(e.clientX,e.clientY),x=Math.floor(wx),y=Math.floor(wy),p=P.get(x,y);
+ moved=0;down={x:e.clientX,y:e.clientY};wasSel=false;
  if(!NA())rips.push({x,y,t0:performance.now()});
  if(p&&canPlay(p)){wasSel=sel===p;if(!wasSel)select(p);drag={p,px:e.clientX,py:e.clientY};cv.style.cursor='grabbing'}else pan={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy};req()};
 cv.onpointermove=e=>{if(ptr.has(e.pointerId))ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -281,6 +233,7 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
  const hl=(x,y,col)=>{const[rx,ry]=rect(x,y);g.fillStyle=col;g.fillRect(rx,ry,s,s)};
  if(last){hl(last.fx,last.fy,'rgba(255,214,64,.42)');hl(last.tx,last.ty,'rgba(255,214,64,.5)')}
  if(sel){const e=Math.min(1,(now-selT)/160);if(e<1)busy=true;hl(sel.x,sel.y,`rgba(255,214,64,${.62*ez(e)})`)}
+ for(const b of bad){const t=(now-b.t0)/520;if(t<1){busy=true;const k=t<.5?1:2*(1-t),[rx,ry]=rect(b.x,b.y);g.fillStyle=`rgba(229,57,64,${.78*k*(.6+.4*Math.abs(Math.cos(t*Math.PI*3)))})`;g.fillRect(rx,ry,s,s)}}bad=bad.filter(b=>now-b.t0<520);
  if(s>=30&&CFG.coords){g.font='700 11px "Bricolage Grotesque",system-ui';const yb=Math.floor(s2w(0,H_-1)[1]),xl=Math.floor(s2w(1,0)[0]);g.textAlign='right';
   for(let x=x0;x<=x1;x++){const[rx,ry]=rect(x,yb);g.fillStyle=(x+yb)&1?DK:LT;g.fillText(fl(x),rx+s-4,ry+s-5)}g.textAlign='left';
   for(let y=y0;y<=y1;y++){const[rx,ry]=rect(xl,y);g.fillStyle=(xl+y)&1?DK:LT;g.fillText(y+1,rx+4,ry+13)}}
@@ -289,7 +242,7 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
   const t=(now-chkT)/900;if(t>=0&&t<1){busy=true;g.strokeStyle=`rgba(255,70,70,${.85*(1-t)})`;g.lineWidth=3;g.beginPath();g.arc(cx,cy,s*(.5+t*1.3),0,7);g.stroke()}
   g.strokeStyle='rgba(229,57,64,.75)';g.lineWidth=3;g.setLineDash([8,6]);for(const q of chk){const[qx,qy]=w2s(q.x+.5,q.y+.5);g.beginPath();g.moveTo(qx,qy);g.lineTo(cx,cy);g.stroke()}g.setLineDash([])}
  if(sel&&!over){const cap=Math.ceil(Math.max(W,H_)/s*1.5)+Math.max(Math.abs(sel.x-Vw.cx),Math.abs(sel.y-Vw.cy))+4;
-  for(const m of gen(P,sel.c,cap,false,sel)){const[rx,ry]=rect(m.tx,m.ty),cx=rx+s/2,cy=ry+s/2;if(cx<-s||cy<-s||cx>W+s||cy>H_+s)continue;
+  for(const m of selMoves(cap)){const[rx,ry]=rect(m.tx,m.ty),cx=rx+s/2,cy=ry+s/2;if(cx<-s||cy<-s||cx>W+s||cy>H_+s)continue;
    const dl=Math.min(140,Math.max(Math.abs(m.tx-sel.x),Math.abs(m.ty-sel.y))*14),t=Math.max(0,Math.min(1,(now-selT-dl)/180));if(t<1)busy=true;const k=NA()?1:eb(t);
    g.beginPath();if(m.cap){g.strokeStyle='rgba(0,0,0,.28)';g.lineWidth=s*.09;g.arc(cx,cy,s*.46*k,0,7);g.stroke()}else{g.fillStyle='rgba(0,0,0,.22)';g.arc(cx,cy,s*.17*k,0,7);g.fill()}}}
  const dp=(c,t,wx,wy,k,al)=>{const im=IM[c+t];if(!im||!im.complete||!im.naturalWidth)return;const[rx,ry]=rect(wx,wy);g.globalAlpha=al;g.drawImage(im,rx-s*(k-1)/2,ry-s*(k-1)/2,s*k,s*k);g.globalAlpha=1};
