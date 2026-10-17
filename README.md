@@ -35,5 +35,5 @@ Standard, King of the Hill, Three-check, Triple Queens, Chess960, Atomic, Antich
 - Translucent glass interface
 
 ## Credits
-
+White and Black chess piece by [Chess.com](chess.com)
 Four-player chess piece art by [KylerCondran](https://github.com/KylerCondran/4PlayerChess). Released under the MIT License.
