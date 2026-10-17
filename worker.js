@@ -36,7 +36,7 @@ export class Hub {
     if (m.t === 'create') {
       if (c.room) return;                                                    // already in a room
       let code; do { code = String(Math.floor(1000 + Math.random() * 9000)); } while (this.rooms.has(code));
-      this.rooms.set(code, { h: c, g: null }); c.room = code;
+      this.rooms.set(code, { h: c, g: null, pub: m.vis !== 'private', hname: R4.clean(m.name), tc: +m.tc || 0 }); c.room = code;
       return this.send(c, { t: 'created', room: code });
     }
     if (m.t === 'join') {

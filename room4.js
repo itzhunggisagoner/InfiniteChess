@@ -12,16 +12,30 @@ const num = v => Math.max(-99, Math.min(99, Math.trunc(+v) || 0));
 function snap(r, code, t) {
   const seats = {};
   for (const c of COL) { const s = r.seats[c]; seats[c] = s ? { n: s.name, b: 0 } : r.bots.has(c) ? { n: 'Bot', b: 1 } : null; }
-  return { t: t || 'lobby', room: code, host: r.hostSeat, started: r.started, tc: r.tc, seats };
+  return { t: t || 'lobby', room: code, host: r.hostSeat, started: r.started, tc: r.tc, vis: r.vis, seats };
 }
 function all(r, send, o, except) { for (const c of COL) { const s = r.seats[c]; if (s && s !== except) send(s, o); } }
 function lobby(r, code, send, t) { all(r, send, snap(r, code, t)); }
 
+/* public rooms that can still be joined (four-player rooms and two-player rooms) */
+function list(rooms) {
+  const out = [];
+  for (const [code, r] of rooms) {
+    if (r.four) {
+      if (r.vis !== 'public' || r.started) continue;
+      const n = COL.filter(x => r.seats[x] || r.bots.has(x)).length;
+      if (n < 4) out.push({ room: code, kind: 4, host: r.seats[r.hostSeat].name, n, tc: r.tc });
+    } else if (r.pub && r.h && !r.g) out.push({ room: code, kind: 2, host: r.hname || 'Player', n: 1, tc: r.tc || 0 });
+  }
+  return out.slice(0, 30);
+}
+
 function handle(rooms, c, m, send) {
+  if (m.t === 'list') { send(c, { t: 'rooms', list: list(rooms) }); return true; }
   if (m.t === 'create4') {
     if (c.room) return true;
     let code; do { code = String(Math.floor(1000 + Math.random() * 9000)); } while (rooms.has(code));
-    const r = { four: true, seats: { red: c, blue: null, yellow: null, green: null }, bots: new Set(), hostSeat: 'red', started: false, tc: Math.max(0, Math.min(10800, +m.tc || 0)) };
+    const r = { four: true, seats: { red: c, blue: null, yellow: null, green: null }, bots: new Set(), hostSeat: 'red', started: false, vis: m.vis === 'private' ? 'private' : 'public', tc: Math.max(0, Math.min(10800, +m.tc || 0)) };
     rooms.set(code, r); c.room = code; c.seat = 'red'; c.name = clean(m.name) || 'Red';
     send(c, { t: 'created4', room: code, seat: 'red' }); lobby(r, code, send); return true;
   }
@@ -43,6 +57,14 @@ function handle(rooms, c, m, send) {
       const text = String(m.text || '').slice(0, 300); if (!text.trim()) break;
       all(r, send, { t: 'chat', name: c.name, seat: c.seat, text }, c); break;
     }
+    case 'cfg':   // host: room settings, synced to everyone in the lobby
+      if (!host || r.started) break;
+      if (m.tc !== undefined) r.tc = Math.max(0, Math.min(10800, +m.tc || 0));
+      if (m.vis === 'public' || m.vis === 'private') r.vis = m.vis;
+      lobby(r, c.room, send); break;
+    case 'rematch':   // host: everyone back to the lobby
+      if (!host || !r.started) break;
+      r.started = false; lobby(r, c.room, send, 'rematch'); break;
     case 'bot':   // host: add / remove a bot in an empty seat (lobby only)
       if (!host || r.started || !COL.includes(m.color) || r.seats[m.color]) break;
       m.on ? r.bots.add(m.color) : r.bots.delete(m.color); lobby(r, c.room, send); break;
@@ -81,4 +103,4 @@ function leave(rooms, c, send) {
   lobby(r, c.room, send); return true;
 }
 
-module.exports = { handle, leave };
+module.exports = { handle, leave, clean };

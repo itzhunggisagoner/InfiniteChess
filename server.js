@@ -41,7 +41,7 @@ function handle(c, m) {
   if (R4.handle(rooms, c, m, send)) return;        // four-player rooms
   if (m.t === 'create') {
     let code; do { code = String(Math.floor(1000 + Math.random() * 9000)); } while (rooms.has(code));
-    rooms.set(code, {h: c, g: null}); c.room = code; return send(c, {t: 'created', room: code});
+    rooms.set(code, {h: c, g: null, pub: m.vis !== 'private', hname: R4.clean(m.name), tc: +m.tc || 0}); c.room = code; return send(c, {t: 'created', room: code});
   }
   if (m.t === 'join') {
     const r = rooms.get(String(m.room));
