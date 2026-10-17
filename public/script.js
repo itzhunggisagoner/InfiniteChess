@@ -132,22 +132,22 @@ const esc=t=>escChat(t);
 const F4COL=['red','blue','yellow','green'],F4CAP={red:'Red',blue:'Blue',yellow:'Yellow',green:'Green'},F4HEX={red:'#ff6666',blue:'#70b7ff',yellow:'#ffe36e',green:'#70e09b'},F4DIR={red:[0,1],yellow:[0,-1],blue:[1,0],green:[-1,0]};
 const F4START={red:p=>p.y===1,yellow:p=>p.y===12,blue:p=>p.x===1,green:p=>p.x===12};
 let F4=null,F4mode=false,F4cell=0,F4origin=[0,0],F4selected=null,F4legal=[];
-const F4valid=(x,y)=>x>=0&&x<14&&y>=0&&y<14&&(x>=3&&x<=10||y>=3&&y<=10),F4key=(x,y)=>x+','+y,sq4=(x,y)=>'abcdefghijklmn'[x]+(y+1);
+const F4valid=()=>true,F4key=(x,y)=>x+','+y,sq4=(x,y)=>'abcdefghijklmn'[x]+(y+1);
 /* view rotation: your own colour is always drawn at the bottom of the screen */
 const f4v=(x,y)=>{const s=F4&&F4.view;return s==='blue'?[13-y,x]:s==='yellow'?[13-x,13-y]:s==='green'?[y,13-x]:[x,y]};
 const f4u=(a,b)=>{const s=F4&&F4.view;return s==='blue'?[b,13-a]:s==='yellow'?[13-a,13-b]:s==='green'?[13-b,a]:[a,b]};
 function f4Init(o){const S=o.seats;
  F4={board:new Map(),cur:'red',alive:[...F4COL],names:Object.fromEntries(F4COL.map(c=>[c,(S[c]&&S[c].n)||F4CAP[c]])),bots:new Set(F4COL.filter(c=>S[c]&&S[c].b)),
-  me:o.me||null,online:!!o.online,host:!!o.host,view:o.me||'red',hist:[],over:false,winner:null,last:null,id:++gid,bt:0,
+  me:o.me||null,online:!!o.online,host:!!o.host,view:o.me||'red',hist:[],score:{red:0,blue:0,yellow:0,green:0},over:false,winner:null,last:null,id:++gid,bt:0,
   clk:o.tc?Object.fromEntries(F4COL.map(c=>[c,o.tc*1000])):null,tk:performance.now()};
  const back=['rook','knight','bishop','queen','king','bishop','knight','rook'];
  for(let i=0;i<8;i++){const x=3+i;f4put(x,0,'red',back[i]);f4put(x,1,'red','pawn');f4put(x,13,'yellow',back[i]);f4put(x,12,'yellow','pawn');f4put(0,x,'blue',back[7-i]);f4put(1,x,'blue','pawn');f4put(13,x,'green',back[i]);f4put(12,x,'green','pawn')}
- F4selected=null;F4legal=[];F4mode=true;VR='4p';mode='4p';over=null;sel=null;clk=null;thinking=false;sfAbort();
+ flip=false;Vw.cx=6.5;Vw.cy=6.5;Vw.s=Math.max(16,Math.min(60,Math.min(W-16,H_-150)/14.5));F4selected=null;F4legal=[];F4mode=true;VR='4p';mode='4p';over=null;sel=null;clk=null;thinking=false;sfAbort();
  document.body.classList.add('f4');chatVis();f4Refresh()}
 function f4Exit(){if(F4)clearTimeout(F4.bt);F4mode=false;F4=null;document.body.classList.remove('f4');$('#p4').hidden=true}
 function f4put(x,y,c,t){F4.board.set(F4key(x,y),{x,y,c,t})}
 function f4At(x,y){return F4.board.get(F4key(x,y))}
-function f4Pseudo(p){const out=[],add=(x,y,dx,dy,slide)=>{while(F4valid(x,y)){const q=f4At(x,y);if(!q)out.push({x,y,cap:false});else{if(q.c!==p.c)out.push({x,y,cap:true});break}if(!slide)break;x+=dx;y+=dy}};
+function f4Pseudo(p){const out=[],add=(x,y,dx,dy,slide)=>{for(let n=0;n<40;n++){const q=f4At(x,y);if(!q)out.push({x,y,cap:false});else{if(q.c!==p.c)out.push({x,y,cap:true});break}if(!slide)break;x+=dx;y+=dy}};
  const O=[[1,0],[-1,0],[0,1],[0,-1]],D=[[1,1],[1,-1],[-1,1],[-1,-1]],dirs=p.t==='rook'?O:p.t==='bishop'?D:p.t==='queen'||p.t==='king'?[...O,...D]:[];
  for(const[dx,dy]of dirs)add(p.x+dx,p.y+dy,dx,dy,p.t!=='king');
  if(p.t==='knight')for(const[dx,dy]of[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]){const x=p.x+dx,y=p.y+dy,q=F4valid(x,y)&&f4At(x,y);if(F4valid(x,y)&&(!q||q.c!==p.c))out.push({x,y,cap:!!q})}
@@ -157,15 +157,15 @@ function f4Pseudo(p){const out=[],add=(x,y,dx,dy,slide)=>{while(F4valid(x,y)){co
 const f4Next=()=>{let i=F4COL.indexOf(F4.cur);do{i=(i+1)%4}while(!F4.alive.includes(F4COL[i]));F4.cur=F4COL[i]};
 function f4Elim(c,why){if(!F4.alive.includes(c))return;F4.alive=F4.alive.filter(x=>x!==c);toast(F4.names[c]+' '+why);
  if(F4.alive.length<=1){F4.over=true;F4.winner=F4.alive[0]||null;f4End()}else if(F4.cur===c)f4Next()}
-function f4End(){const w=F4.winner;setTimeout(()=>{if(F4&&F4.over){play('game-end');dlg(`<h2>${w?esc(F4.names[w])+' wins!':'Game over'}</h2><p>${w&&w===F4.me?'You won this game.':'The game has ended.'}</p><div class=sg><button class=pb data-a=new>New game</button><button data-a=x>View board</button></div>`)}},700)}
+function f4End(){const w=F4.winner;setTimeout(()=>{if(F4&&F4.over){play('game-end');dlg(`<h2>${w?esc(F4.names[w])+' wins!':'Game over'}</h2><p>${w&&w===F4.me?'You won this game.':'The game has ended.'}</p><div class=sg>${F4.online?(F4.host?'<button class=pb data-a=rematch>Play again</button>':''):'<button class=pb data-a=new>New game</button>'}<button data-a=${F4.online?'new':'x'}>${F4.online?'Main menu':'View board'}</button>${F4.online?'<button data-a=x>View board</button>':''}</div>${F4.online&&!F4.host?'<p>Waiting for the host to start another game…</p>':''}`)}},700)}
 function f4Move(p,x,y,remote){if(!F4||!p||F4.over||p.c!==F4.cur)return false;const m=f4Pseudo(p).find(a=>a.x===x&&a.y===y);if(!m)return false;
  const fx=p.x,fy=p.y,q=f4At(x,y);f4Tick();
  if(F4.online&&!remote&&WS){const o={t:'move4',fx,fy,tx:x,ty:y};if(F4.bots.has(p.c))o.bot=p.c;WS.send(JSON.stringify(o))}
  F4.board.delete(F4key(fx,fy));p.x=x;p.y=y;
- if(p.t==='pawn'&&(p.c==='red'&&y===13||p.c==='yellow'&&y===0||p.c==='blue'&&x===13||p.c==='green'&&x===0))p.t='queen';
+ if(p.t==='pawn'&&(p.c==='red'&&y>=9||p.c==='yellow'&&y<=4||p.c==='blue'&&x>=9||p.c==='green'&&x<=4))p.t='queen';
  F4.board.set(F4key(x,y),p);F4.hist.push({c:p.c,s:sq4(fx,fy)+(q?'x':'-')+sq4(x,y)});F4.last={fx,fy,tx:x,ty:y};F4selected=null;F4legal=[];
  play(q?'capture':remote||F4.bots.has(p.c)?'move-opponent':'move-self');
- if(q&&q.t==='king')f4Elim(q.c,'was eliminated');
+ if(q)F4.score[p.c]+=q.t==='king'?0:F4V[q.t];if(q&&q.t==='king')f4Elim(q.c,'was eliminated');
  if(!F4.over)f4Next();f4Refresh();return true}
 const F4V={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:100};
 function f4BotMove(){if(!F4||F4.over||!F4.bots.has(F4.cur)||F4.online&&!F4.host)return;const c=F4.cur,
@@ -182,38 +182,51 @@ function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('ck
  const t=$('#stt');t.textContent=F4.over?(F4.winner?F4.names[F4.winner]+' wins':'Game over'):c===F4.me?'Your turn':F4.names[c]+"'s turn";t.style.color=F4HEX[F4.over&&F4.winner?F4.winner:c];
  $('.tn').style.background=F4.over?'transparent':F4HEX[c];$('#eng').style.display='none';$('#clk').hidden=true;
  const p=$('#p4');p.hidden=false;
- p.innerHTML=F4COL.map(k=>`<div class="pr${k===c&&!F4.over?' act':''}${F4.alive.includes(k)?'':' out'}" data-c="${k}"><i style="background:${F4HEX[k]}"></i><span class=pn style="color:${F4HEX[k]}">${esc(F4.names[k])}${k===F4.me?' •':''}</span>${F4.bots.has(k)?'<em>bot</em>':''}<b></b></div>`).join('');
+ p.innerHTML=F4COL.map(k=>`<div class="pr${k===c&&!F4.over?' act':''}${F4.alive.includes(k)?'':' out'}" data-c="${k}"><i style="background:${F4HEX[k]}"></i><span class=pn style="color:${F4HEX[k]}">${esc(F4.names[k])}${k===F4.me?' •':''}</span>${F4.bots.has(k)?'<em>bot</em>':''}${F4.score[k]?`<em class=sc>+${F4.score[k]}</em>`:''}<b></b></div>`).join('');
  f4Clocks();
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
-/* SVGs only have a viewBox (no width/height) which Firefox/Safari refuse to draw on a canvas, so give them an explicit size */
+/* the SVGs only have a viewBox (no width/height); Firefox/Safari can't draw those on a canvas, so load the text and add a size */
 const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image(),u=`${R}pieces/4playerchess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im;
- fetch(u).then(r=>r.text()).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b/,'<svg width="180" height="180"'))}).catch(()=>{im.src=u})}
-function f4Draw(){const cw=Math.min((W-24)/14,(H_-100)/14),left=(W-cw*14)/2,top=(H_-cw*14)/2;F4cell=cw;F4origin=[left,top];g.fillStyle='#11171a';g.fillRect(0,0,W,H_);if(!F4)return;
- const L=F4.last;
- for(let vy=0;vy<14;vy++)for(let vx=0;vx<14;vx++){const[x,y]=f4u(vx,vy);if(!F4valid(x,y))continue;const px=left+vx*cw,py=top+(13-vy)*cw;
-  g.fillStyle=(x+y)%2?'#6b8b80':'#d4dfd4';g.fillRect(px,py,cw+.4,cw+.4);
-  if(L&&(x===L.fx&&y===L.fy||x===L.tx&&y===L.ty)){g.fillStyle='rgba(255,214,64,.42)';g.fillRect(px,py,cw,cw)}
-  if(F4selected&&F4selected.x===x&&F4selected.y===y){g.fillStyle='#f3d45b99';g.fillRect(px,py,cw,cw)}
-  const lm=F4legal.find(m=>m.x===x&&m.y===y);if(lm){g.fillStyle=lm.cap?'#df515b99':'#17251e66';g.beginPath();g.arc(px+cw/2,py+cw/2,cw*(lm.cap?.42:.16),0,7);g.fill()}
-  const p=f4At(x,y);if(p){const im=F4IM[p.c+p.t];if(im&&im.complete&&im.naturalWidth)g.drawImage(im,px+cw*.05,py+cw*.05,cw*.9,cw*.9)}}}
-function f4Pointer(e){if(!F4mode||homeOn||!F4)return false;const[left,top]=F4origin,cw=F4cell,vx=Math.floor((e.clientX-left)/cw),vy=13-Math.floor((e.clientY-top)/cw);
- if(vx<0||vx>13||vy<0||vy>13)return true;const[x,y]=f4u(vx,vy);if(!F4valid(x,y))return true;const p=f4At(x,y),
- mine=q=>q&&!F4.over&&q.c===F4.cur&&(F4.online?q.c===F4.me:!F4.bots.has(q.c));
- if(F4selected){if(f4Move(F4selected,x,y))return true;if(mine(p)){F4selected=p;F4legal=f4Pseudo(p)}else{F4selected=null;F4legal=[]}}
+ fetch(u).then(r=>r.text()).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{im.src=u})}
+const F4LET={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
+/* infinite board: the original cross is drawn normally, everything around it is open (slightly darker) ground */
+const f4inCross=(x,y)=>x>=0&&x<14&&y>=0&&y<14&&(x>=3&&x<=10||y>=3&&y<=10);
+function f4Draw(){g.fillStyle='#11171a';g.fillRect(0,0,W,H_);if(!F4)return;const s=Vw.s,L=F4.last,
+ c1=s2w(0,0),c2=s2w(W,H_),x0=Math.floor(Math.min(c1[0],c2[0])),x1=Math.ceil(Math.max(c1[0],c2[0])),y0=Math.floor(Math.min(c1[1],c2[1])),y1=Math.ceil(Math.max(c1[1],c2[1]));
+ for(let vy=y0;vy<=y1;vy++)for(let vx=x0;vx<=x1;vx++){const[x,y]=f4u(vx,vy),[rx,ry]=rect(vx,vy);
+  g.fillStyle=(x+y)&1?'#6b8b80':'#d4dfd4';g.fillRect(rx,ry,s+.6,s+.6);
+  if(L&&(x===L.fx&&y===L.fy||x===L.tx&&y===L.ty)){g.fillStyle='rgba(255,214,64,.42)';g.fillRect(rx,ry,s,s)}
+  if(F4selected&&F4selected.x===x&&F4selected.y===y){g.fillStyle='#f3d45b99';g.fillRect(rx,ry,s,s)}
+  const lm=F4legal.find(m=>m.x===x&&m.y===y);if(lm){g.fillStyle=lm.cap?'#df515b99':'#17251e66';g.beginPath();g.arc(rx+s/2,ry+s/2,s*(lm.cap?.42:.16),0,7);g.fill()}}
+ for(const p of F4.board.values()){const[vx,vy]=f4v(p.x,p.y);if(vx<x0-1||vx>x1+1||vy<y0-1||vy>y1+1)continue;const[rx,ry]=rect(vx,vy),im=F4IM[p.c+p.t];
+  if(im&&im.complete&&im.naturalWidth)g.drawImage(im,rx+s*.05,ry+s*.05,s*.9,s*.9);
+  else{g.fillStyle=F4HEX[p.c];g.beginPath();g.arc(rx+s/2,ry+s/2,s*.38,0,7);g.fill();g.fillStyle='#10161a';g.font=`700 ${s*.42}px system-ui`;g.textAlign='center';g.textBaseline='middle';g.fillText(F4LET[p.t],rx+s/2,ry+s/2+1);g.textBaseline='alphabetic'}}}
+/* input: tap = select / move, drag = pan, pinch / wheel = zoom */
+const f4p=new Map();let f4g=null,f4pinch=null;
+function f4Down(e){drawer(false);cv.setPointerCapture(e.pointerId);f4p.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(f4p.size===2){f4g=null;const[a,b]=[...f4p.values()];f4pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:Vw.s};return}
+ f4g={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy,mv:0}}
+function f4Mv(e){if(f4p.has(e.pointerId))f4p.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(f4pinch&&f4p.size===2){const[a,b]=[...f4p.values()];Vw.s=Math.max(14,Math.min(140,f4pinch.s*Math.hypot(a.x-b.x,a.y-b.y)/f4pinch.d));req();return}
+ if(!f4g)return;f4g.mv=Math.max(f4g.mv,Math.hypot(e.clientX-f4g.x,e.clientY-f4g.y));if(f4g.mv>6){Vw.cx=f4g.cx-(e.clientX-f4g.x)/Vw.s;Vw.cy=f4g.cy+(e.clientY-f4g.y)/Vw.s;req()}}
+function f4Up(e){f4p.delete(e.pointerId);if(f4pinch){if(f4p.size<2)f4pinch=null;f4g=null;return}if(f4g&&f4g.mv<=6)f4Tap(e);f4g=null}
+function f4Tap(e){if(!F4||F4.over)return;const[wx,wy]=s2w(e.clientX,e.clientY),[x,y]=f4u(Math.floor(wx),Math.floor(wy)),p=f4At(x,y),
+ mine=q=>q&&q.c===F4.cur&&(F4.online?q.c===F4.me:!F4.bots.has(q.c));
+ if(F4selected){if(f4Move(F4selected,x,y))return;if(mine(p)){F4selected=p;F4legal=f4Pseudo(p)}else{F4selected=null;F4legal=[]}}
  else if(mine(p)){F4selected=p;F4legal=f4Pseudo(p)}
- req();return true}
+ req()}
 
 /* ======================= ONLINE ROOMS ======================= */
 let WS=null,hbT=0,lan={color:'w',tc:0,vr:'std',lay:0};
-let chatLog=[],chatUnread=0,chatOpen=false,R4={code:'',seat:null,host:false,seats:{},tc:0};
+let chatLog=[],chatUnread=0,chatOpen=false,R4={code:'',seat:null,host:false,seats:{},tc:0,vis:'public'};
 function chatBadge(){const b=$('#hb');if(!b)return;let n=b.querySelector('.chat-badge');if(chatUnread){if(!n){n=document.createElement('i');n.className='chat-badge';b.appendChild(n)}n.textContent=chatUnread>99?'99+':chatUnread}else if(n)n.remove()}
 function openChat(){chatUnread=0;chatBadge();dlg(`<div class="chat-head"><h2>Room chat</h2><button data-a="chatclose" aria-label="Close">×</button></div><div id="chatlog" class="chat-log">${chatLog.map(chatHtml).join('')||'<p class="tag">No messages yet.</p>'}</div><form id="chatform" class="chat-form"><input id="chatinput" maxlength="300" placeholder="Message players…" autocomplete="off"><button class="pb" type="submit">Send</button></form>`);const l=$('#chatlog');if(l)l.scrollTop=l.scrollHeight;chatOpen=true;setTimeout(()=>$('#chatinput')?.focus(),50)}
-const chatHtml=m=>`<div class="chat-msg ${m.self?'self':''}"><b>${escChat(m.name)}</b><span>${escChat(m.text)}</span></div>`;
+const chatHtml=m=>`<div class="chat-msg ${m.self?'self':''}"><b${m.seat&&F4HEX[m.seat]?` style="color:${F4HEX[m.seat]}"`:''}>${escChat(m.name)}${m.self?' (you)':''}</b><span>${escChat(m.text)}</span></div>`;
 function chatPush(m){chatLog.push(m);if(chatLog.length>100)chatLog.shift();const l=$('#chatlog');if(chatOpen&&l){const e=l.querySelector('p.tag');if(e)e.remove();l.insertAdjacentHTML('beforeend',chatHtml(m));l.scrollTop=l.scrollHeight}else if(!m.self){chatUnread++;chatBadge();if(homeOn&&hs.step==='room4')renderHome('room4');play('move-opponent')}}
 const inR4=()=>!!R4.seat&&!!WS&&(hs.step==='room4'||F4mode&&F4&&F4.online);
 function chatVis(){document.body.classList.toggle('noch',!(WS&&(mode==='lan'||F4mode&&F4&&F4.online)))}
 function escChat(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function sendChat(text){text=String(text||'').trim().slice(0,300);if(!text)return;if(!WS||WS.readyState!==1)return toast('Chat is available in an online room.');const m={t:'chat',text,name:inR4()?((R4.seats[R4.seat]||{}).n||'Player'):mode==='lan'?(me==='w'?'White':'Black'):'Player'};WS.send(JSON.stringify(m));chatPush({...m,self:true})}
+function sendChat(text){text=String(text||'').trim().slice(0,300);if(!text)return;if(!WS||WS.readyState!==1)return toast('Chat is available in an online room.');const m={t:'chat',text,name:inR4()?((R4.seats[R4.seat]||{}).n||'Player'):mode==='lan'?(me==='w'?'White':'Black'):'Player'};WS.send(JSON.stringify(m));chatPush({...m,seat:inR4()?R4.seat:null,self:true})}
 function wsConnect(cb){let done=0;const fin=w=>{if(!done){done=1;cb(w)}};let ws;
  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){return fin(null)}
  const to=setTimeout(()=>{try{ws.close()}catch(e){}fin(null)},3500);
@@ -225,9 +238,11 @@ function lanMsg(m){
  else if(m.t==='peer'){WS.send(JSON.stringify({t:'start',color:opp(lan.color),tc:lan.tc,vr:lan.vr,lay:lan.lay}));startGame({mode:'lan',color:lan.color,tc:lan.tc,vr:lan.vr,lay:lan.lay})}
  else if(m.t==='start')startGame({mode:'lan',color:m.color==='b'?'b':'w',tc:+m.tc||0,vr:m.vr,lay:m.lay})
  else if(m.t==='joined')renderHome('lanwj')
- else if(m.t==='chat')chatPush({name:String(m.name||'Player').slice(0,24),text:String(m.text||'').slice(0,300),self:false})
+ else if(m.t==='chat')chatPush({seat:m.seat,name:String(m.name||'Player').slice(0,24),text:String(m.text||'').slice(0,300),self:false})
  else if(m.t==='created4'||m.t==='joined4'){R4.code=m.room;R4.seat=m.seat;R4.host=m.t==='created4';renderHome('room4')}
- else if(m.t==='lobby'){R4.seats=m.seats;R4.host=R4.seat===m.host;R4.tc=m.tc;if(homeOn&&hs.step==='room4')renderHome('room4')}
+ else if(m.t==='rematch'){R4.seats=m.seats;R4.host=R4.seat===m.host;R4.tc=m.tc;R4.vis=m.vis;f4Exit();closeDlg();chatVis();openHome('room4')}
+ else if(m.t==='rooms'){hs.rooms=m.list;if(homeOn&&hs.step==='rooms')renderHome('rooms')}
+ else if(m.t==='lobby'){R4.vis=m.vis;R4.seats=m.seats;R4.host=R4.seat===m.host;R4.tc=m.tc;if(homeOn&&hs.step==='room4')renderHome('room4')}
  else if(m.t==='kicked'){lanClose();toast('The host removed you from the room');if(homeOn)renderHome('lan')}
  else if(m.t==='start4')startF4({seats:m.seats,me:R4.seat,online:true,host:R4.host,tc:m.tc})
  else if(m.t==='move4'&&F4mode&&F4){const p=f4At(m.fx,m.fy);if(p&&p.c===m.c)f4Move(p,m.tx,m.ty,true)}
@@ -250,7 +265,7 @@ const GEAR='M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 
 const ACT=[['home','Main menu','M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z',()=>openHome('main')],
  ['undo','Undo','M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3',undo],
  ['flip','Flip board','M7 4v14m0 0l-3-3m3 3l3-3M17 20V6m0 0l-3 3m3-3l3 3',()=>{flip=!flip;req()}],
- ['ctr','Center view','M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3',()=>fly(4,4)],
+ ['ctr','Center view','M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3',()=>F4mode?fly(6.5,6.5):fly(4,4)],
  ['snd','Sound','M11 5L6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 010 7',()=>{CFG.snd=!CFG.snd;save();updSnd();if(CFG.snd)play('move-self')},true],
  ['chat','Room chat','M21 15a4 4 0 01-4 4H7l-4 3V7a4 4 0 014-4h10a4 4 0 014 4z',openChat],
  ['set','Settings',GEAR,settings],
@@ -262,7 +277,7 @@ $('#hb').onclick=()=>drawer();
 $('#dg').onclick=e=>{const b=e.target.closest('.di');if(!b)return;const a=ACT.find(x=>x[0]===b.dataset.k);a[3]();if(!a[4])drawer(false)};
 
 /* ======================= UI: lobby ======================= */
-let homeOn=false,saveV=null,hs={color:'w',lv:1,tc:0,code:'',vr:'std',cm:5,cs:0,s4b:{red:0,blue:1,yellow:1,green:1},s4h:{red:0,blue:0,yellow:0,green:0}};
+let homeOn=false,saveV=null,hs={color:'w',lv:1,tc:0,code:'',vr:'std',cm:5,cs:0,vis:'public',rooms:null,s4b:{red:0,blue:1,yellow:1,green:1},s4h:{red:0,blue:0,yellow:0,green:0}};
 const hasGame=()=>F4mode&&F4?!F4.over:H.length>0&&!over,pu=(c,t)=>`${R}pieces/${c==='w'?'white':'black'}_${PN[t]}.png`,pc=(c,t)=>`<img src="${pu(c,t)}" alt="">`;
 const back=s=>`<button class=pill data-s="${s}">‹ Back</button>`,
  optRow=(key,arr)=>`<div class="opts${key==='tc'?' w':key==='vr'?' w v':''}">${arr.map(([v,l,x,i])=>`<button class="opt${String(hs[key])===String(v)?' on':''}" data-k="${key}" data-v="${v}">${i||''}<span>${l}</span>${x?`<small>${x}</small>`:''}</button>`).join('')}</div>`,
@@ -270,6 +285,7 @@ const back=s=>`<button class=pill data-s="${s}">‹ Back</button>`,
  times=()=>`<div class=lb2>Time per side</div>${optRow('tc',TCS)}<div class="cust${hs.tc==='c'?' on':''}" id=cust><input id=cm type=number inputmode=numeric min=0 max=180 value=${hs.cm} aria-label=Minutes><b>:</b><input id=cs type=number inputmode=numeric min=0 max=59 value=${String(hs.cs).padStart(2,'0')} aria-label=Seconds><small>min : sec</small></div>`,
  vrs=()=>`<div class=lb2>Variant</div>${optRow('vr',VRS)}`,
  seats4=()=>{const a=hs[hs.step==='bot'?'s4b':'s4h'];return `<div class=lb2>Seats</div><div class="opts w">${F4COL.map(c=>`<button class=opt data-seat=${c}><span style="color:${F4HEX[c]}">${F4CAP[c]}</span><small>${a[c]?'Bot':'Human'}</small></button>`).join('')}</div>`},
+ nameRow=()=>`<div class=lb2>Your name</div><input class=ni id=pname maxlength=14 placeholder="Player" autocomplete=off value="${esc(pname())}">`,
  pname=()=>{let v='';try{v=localStorage.getItem('icname')||''}catch(e){}return v},
  tile=(h,a,b,t,d)=>`<button class=tile data-s="${h}"><span class=pcs>${pc(a[0],a[1])}${pc(b[0],b[1])}</span><span class=tx><b>${t}</b><span>${d}</span></span></button>`;
 function renderHome(step){const h=$('#hin');let x='';hs.step=step;
@@ -279,34 +295,41 @@ function renderHome(step){const h=$('#hin');let x='';hs.step=step;
  else if(step==='bot')x=`${back('main')}<h2>Play the engine</h2>${hs.vr==='4p'?vrs()+seats4():`<div class=lb2>You play as</div>${colors()}<div class=lb2>Difficulty</div>${optRow('lv',LVN.map(([l,e],i)=>[i,l,e]))}${vrs()}`}${times()}<button class=go data-h=startbot>Start game</button>`;
  else if(step==='hum')x=`${back('main')}<h2>Play a friend</h2>${vrs()}${hs.vr==='4p'?seats4():''}${times()}<button class=go data-h=starthum>Start game</button>`;
  else if(step==='lan')x=`${back('main')}<h2>Play online</h2><p class=tag>Create a room and share the 4-digit code with a friend — or enter their code to join.</p>
-  <div class="tiles two">${tile('lanc',['w','k'],['b','k'],'Create room','Get a 4-digit code')}${tile('lanj',['w','n'],['b','n'],'Join room','Enter a friend\'s code')}</div>`;
- else if(step==='lanc')x=`${back('lan')}<h2>Create room</h2>${hs.vr==='4p'?`<div class=lb2>Your name</div><input class=ni id=pname maxlength=14 placeholder="Player" autocomplete=off value="${esc(pname())}">${vrs()}<p class=tag>Add bots or kick players in the room, then press Start.</p>`:`<div class=lb2>You play as</div>${colors()}${vrs()}`}${times()}<button class=go data-h=create>Create room</button><p class=err id=lerr></p>`;
+  <div class=tiles>${tile('lanc',['w','k'],['b','k'],'Create room','Public or private')}${tile('lanj',['w','n'],['b','n'],'Join room','Enter a code')}${tile('rooms',['w','p'],['b','p'],'Room list','Browse public rooms')}</div>`;
+ else if(step==='lanc')x=`${back('lan')}<h2>Create room</h2>${nameRow()}${hs.vr==='4p'?`${vrs()}<p class=tag>Add bots or kick players in the room, then press Start.</p>`:`<div class=lb2>You play as</div>${colors()}${vrs()}`}<div class=lb2>Room visibility</div>${optRow('vis',[['public','Public','Shown in room list'],['private','Private','Join by code only']])}${times()}<button class=go data-h=create>Create room</button><p class=err id=lerr></p>`;
  else if(step==='lanw')x=`<h2>Your room code</h2><div class=code>${hs.code}</div><p class=tag>Your friend opens <b>${location.origin}</b>, picks Play online → Join room and enters this code.</p><p class=tag><i class=sp></i>Waiting for opponent…</p><button class=pill data-h=cancel>Cancel room</button>`;
  else if(step==='lanwj')x=`<h2>Joined the room</h2><p class=tag><i class=sp></i>Waiting for the host to start the game…</p><button class=pill data-h=cancel>Leave room</button>`;
  else if(step==='room4'){const S=R4.seats,full=F4COL.every(c=>S[c]);
-  x=`<h2>4-player room</h2><div class=code>${R4.code}</div><p class=tag>Friends join with this code. Empty seats can be filled with bots.</p>
+  x=`<h2>4-player room</h2><div class=code>${R4.code}</div><p class=tag>${R4.vis==='public'?'Public room: shown in the room list.':'Private room: only joinable with this code.'}</p>
+  ${(()=>{const tl=[[0,'No limit'],[60,'1 min'],[180,'3 min'],[300,'5 min'],[600,'10 min']];if(!tl.some(a=>a[0]===R4.tc))tl.push([R4.tc,Math.round(R4.tc/60)+' min']);const row=(k,arr)=>`<div class="opts w">${arr.map(([v,l])=>`<button class="opt${String(R4[k])===String(v)?' on':''}" ${R4.host?`data-cfg=${k} data-v=${v}`:'disabled'}><span>${l}</span></button>`).join('')}</div>`;return `<div class=lb2>Time per side${R4.host?'':' (set by host)'}</div>${row('tc',tl)}<div class=lb2>Visibility</div>${row('vis',[['public','Public'],['private','Private']])}`})()}
   <div class=seats>${F4COL.map(c=>{const t=S[c],you=c===R4.seat,act=R4.host&&!you?(t?(t.b?`<button class=mini data-r4=bot0 data-cl=${c}>Remove</button>`:`<button class="mini dn" data-r4=kick data-cl=${c}>Kick</button>`):`<button class=mini data-r4=bot1 data-cl=${c}>+ Bot</button>`):'';
    return `<div class=seat><i style="background:${F4HEX[c]}"></i><span class=sn style="color:${F4HEX[c]}">${t?esc(t.n):'Waiting…'}</span><small>${you?'You':t?(t.b?'Bot':c==='red'?'Host':'Player'):'Empty'}</small>${act}</div>`}).join('')}</div>
   ${R4.host?`<button class=go data-r4=start ${full?'':'disabled'}>Start game</button>${full?'':'<p class=tag>Fill every seat (players or bots) to start.</p>'}`:'<p class=tag><i class=sp></i>Waiting for the host to start…</p>'}
-  <div class=sub><button class=pill data-r4=chat>Chat${chatUnread?` <span class=cbd>${chatUnread}</span>`:''}</button><button class=pill data-h=cancel>Leave room</button></div>`}
+  <div class=sub><button class=pill data-r4=copy>Copy code</button><button class=pill data-r4=chat>Chat${chatUnread?` <span class=cbd>${chatUnread}</span>`:''}</button><button class=pill data-h=cancel>Leave room</button></div>`}
+ else if(step==='rooms'){const tcl=t=>t?(t>=60?Math.round(t/60)+' min':t+'s'):'No limit';
+  x=`${back('lan')}<h2>Public rooms</h2><div class=rl>${hs.rooms===null?'<p class=tag><i class=sp></i>Loading…</p>':hs.rooms.length?hs.rooms.map(r=>`<button class=room data-jr=${r.room}><span class=rk>${r.kind===4?'4P':'2P'}</span><span class=rn>${esc(r.host)}</span><small>${r.n}/${r.kind===4?4:2} · ${tcl(r.tc)}</small><b>${r.room}</b></button>`).join(''):'<p class=tag>No public rooms right now. Create one!</p>'}</div><button class=pill data-h=refresh>↻ Refresh</button><p class=err id=lerr></p>`}
  else if(step==='lanj')x=`${back('lan')}<h2>Join room</h2><input class=ni id=pname maxlength=14 placeholder="Your name (4-player rooms)" autocomplete=off value="${esc(pname())}"><input class=ci id=code inputmode=numeric maxlength=4 placeholder="0000" autocomplete=off><button class=go data-h=join>Join room</button><p class=err id=lerr></p>`;
  h.className='';h.innerHTML=x;void h.offsetWidth;h.className='in';$('#home').scrollTop=0}
 function openHome(step){if(!homeOn)saveV={cx:Vw.cx,cy:Vw.cy,s:Vw.s};homeOn=true;document.body.classList.add('lobby');drawer(false);$('#home').classList.add('open');renderHome(step||'main');drawClock();req()}
 function closeHome(restore){homeOn=false;document.body.classList.remove('lobby');$('#home').classList.remove('open');if(restore&&saveV)Object.assign(Vw,saveV);if(clk)clk.last=performance.now();drawClock();req()}
+function loadRooms(){hs.rooms=null;renderHome('rooms');const go=w=>w?w.send('{"t":"list"}'):lanFail();if(WS&&WS.readyState===1)go(WS);else wsConnect(go)}
 function startF4(o){closeDlg();closeHome(false);if(!o.online)lanClose();f4Init(o);play('game-start')}
 function startOffline4(){const tc=tcSec();if(tc===null)return;const a=hs[hs.step==='bot'?'s4b':'s4h'],seats=Object.fromEntries(F4COL.map(c=>[c,{n:F4CAP[c],b:a[c]?1:0}]));
  if(F4COL.every(c=>seats[c].b))return toast('At least one seat must be human');startF4({seats,me:null,online:false,tc})}
 function startGame(o){f4Exit();closeDlg();closeHome(false);if(o.mode!=='lan')lanClose();newGame(o);chatVis();play('game-start')}
 function lanFail(){const e=$('#lerr');const t='Couldn\'t reach the game server. Please try again in a moment.';if(e)e.textContent=t;toast(t)}
 $('#home').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
- if(d.s){if(hs.step==='lanw'||hs.step==='lanwj')lanClose();renderHome(d.s)}
+ if(d.s){if(d.s==='rooms')return loadRooms();if(hs.step==='lanw'||hs.step==='lanwj')lanClose();renderHome(d.s)}
  else if(d.k){const pv=hs[d.k];hs[d.k]=d.v;if(d.k==='vr'&&(d.v==='4p')!==(pv==='4p'))return renderHome(hs.step);b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));if(d.k==='tc'){const c=$('#cust');c&&c.classList.toggle('on',d.v==='c')}}
+ else if(d.cfg){WS&&WS.send(JSON.stringify({t:'cfg',[d.cfg]:d.v}))}
+ else if(d.jr){WS&&WS.readyState===1?WS.send(JSON.stringify({t:'join',room:d.jr,name:pname()})):lanFail()}
+ else if(d.h==='refresh')loadRooms()
  else if(d.seat){const a=hs[hs.step==='bot'?'s4b':'s4h'];a[d.seat]^=1;renderHome(hs.step)}
- else if(d.r4){const tx=o=>WS&&WS.send(JSON.stringify(o));if(d.r4==='start')tx({t:'start4'});else if(d.r4==='kick')tx({t:'kick',color:d.cl});else if(d.r4==='bot1')tx({t:'bot',color:d.cl,on:1});else if(d.r4==='bot0')tx({t:'bot',color:d.cl,on:0});else if(d.r4==='chat')openChat()}
+ else if(d.r4){const tx=o=>WS&&WS.send(JSON.stringify(o));if(d.r4==='start')tx({t:'start4'});else if(d.r4==='kick')tx({t:'kick',color:d.cl});else if(d.r4==='bot1')tx({t:'bot',color:d.cl,on:1});else if(d.r4==='bot0')tx({t:'bot',color:d.cl,on:0});else if(d.r4==='chat')openChat();else if(d.r4==='copy'){try{navigator.clipboard.writeText(R4.code).then(()=>toast('Room code copied'),()=>toast('Code: '+R4.code))}catch(e){toast('Code: '+R4.code)}}}
  else if(d.h==='startbot'){if(hs.vr==='4p')return startOffline4();const tc=tcSec();if(tc!==null)startGame({mode:'bot',color:hs.color,lv:hs.lv,tc,vr:hs.vr})}
  else if(d.h==='starthum'){if(hs.vr==='4p')return startOffline4();const tc=tcSec();if(tc!==null)startGame({mode:'2p',color:'w',tc,vr:hs.vr})}
  else if(d.h==='set')settings();else if(d.h==='resume')closeHome(true);
- else if(d.h==='create'){const tc=tcSec();if(tc===null)return;if(hs.vr==='4p'){const nm=savedName();lanClose();return wsConnect(w=>w?w.send(JSON.stringify({t:'create4',name:nm,tc})):lanFail())}lan={color:hs.color==='r'?(Math.random()<.5?'w':'b'):hs.color,tc,vr:hs.vr,lay:hs.vr==='960'?Math.random()*960|0:0};lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'create'})):lanFail())}
+ else if(d.h==='create'){const tc=tcSec();if(tc===null)return;if(hs.vr==='4p'){const nm=savedName();lanClose();return wsConnect(w=>w?w.send(JSON.stringify({t:'create4',name:nm,tc,vis:hs.vis})):lanFail())}lan={color:hs.color==='r'?(Math.random()<.5?'w':'b'):hs.color,tc,vr:hs.vr,lay:hs.vr==='960'?Math.random()*960|0:0};lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'create',vis:hs.vis,name:savedName(),tc})):lanFail())}
  else if(d.h==='join'){const c=($('#code').value||'').trim();if(c.length<4)return($('#lerr').textContent='Enter the full 4-digit code.');const nm=savedName();lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'join',room:c,name:nm})):lanFail())}
  else if(d.h==='cancel'){lanClose();renderHome('lan')}};
 function savedName(){const v=(($('#pname')||{}).value||'').trim().slice(0,14);try{localStorage.setItem('icname',v)}catch(e){}return v}
@@ -322,7 +345,7 @@ function settings(){const tg=(k,l)=>`<div class=row><span>${l}</span><label clas
 $('#box').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
  if(d.a==='chatclose'){closeDlg();chatOpen=false;return}
  if(d.th!==undefined){CFG.th=+d.th;save();b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));req()}
- else if(d.a==='new'){closeDlg();openHome('main')}else if(d.a==='x')closeDlg();else if(d.a==='res'){closeDlg();resign()}};
+ else if(d.a==='rematch'){closeDlg();WS&&WS.send('{"t":"rematch"}')}else if(d.a==='new'){closeDlg();openHome('main')}else if(d.a==='x')closeDlg();else if(d.a==='res'){closeDlg();resign()}};
 $('#box').onsubmit=e=>{if(e.target.id==='chatform'){e.preventDefault();const i=$('#chatinput');const t=i.value;sendChat(t);if(i)i.value=''}};
 $('#box').oninput=e=>{const c=e.target.dataset.c;if(!c)return;if(c==='vol')CFG.vol=e.target.value/100;else CFG[c]=e.target.checked;if(c==='snd')updSnd();save();req()};
 $('#box').onchange=e=>{if(e.target.dataset.c==='vol')play('move-self')};
@@ -337,18 +360,18 @@ function fly(x,y){const sx=Vw.cx,sy=Vw.cy,t0=performance.now();(function st(t){c
 let drag=null,pan=null,pinch=null,down=null,moved=0,wasSel=false;const ptr=new Map();
 const select=p=>{sel=p;selT=performance.now()};
 let mc=null;function selMoves(cap){cap=Math.ceil(cap/16)*16;if(!mc||mc.p!==sel||mc.n!==H.length||mc.g!==gid||mc.cap<cap)mc={p:sel,n:H.length,g:gid,cap,L:gen(P,sel.c,cap,false,sel)};return mc.L}
-cv.onpointerdown=e=>{if(F4mode&&!homeOn){drawer(false);cv.setPointerCapture(e.pointerId);f4Pointer(e);return}drawer(false);cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+cv.onpointerdown=e=>{if(F4mode&&!homeOn){f4Down(e);return}drawer(false);cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptr.size===2){drag=pan=null;const[a,b]=[...ptr.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:Vw.s};return}
  for(const k of ind)if(Math.hypot(e.clientX-k.x,e.clientY-k.y)<22){fly(k.p.x+.5,k.p.y+.5);return}
  const[wx,wy]=s2w(e.clientX,e.clientY),x=Math.floor(wx),y=Math.floor(wy),p=P.get(x,y);
  moved=0;down={x:e.clientX,y:e.clientY};wasSel=false;
  if(!NA())rips.push({x,y,t0:performance.now()});
  if(p&&canPlay(p)){wasSel=sel===p;if(!wasSel)select(p);drag={p,px:e.clientX,py:e.clientY};cv.style.cursor='grabbing'}else pan={x:e.clientX,y:e.clientY,cx:Vw.cx,cy:Vw.cy};req()};
-cv.onpointermove=e=>{if(ptr.has(e.pointerId))ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+cv.onpointermove=e=>{if(F4mode&&!homeOn){f4Mv(e);return}if(ptr.has(e.pointerId))ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(pinch&&ptr.size===2){const[a,b]=[...ptr.values()];Vw.s=Math.max(14,Math.min(140,pinch.s*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d));req();return}
  if(!down)return;moved=Math.max(moved,Math.hypot(e.clientX-down.x,e.clientY-down.y));
  if(drag){drag.px=e.clientX;drag.py=e.clientY}else if(pan&&moved>3){const f=flip?-1:1;Vw.cx=pan.cx-f*(e.clientX-pan.x)/Vw.s;Vw.cy=pan.cy+f*(e.clientY-pan.y)/Vw.s}req()};
-cv.onpointerup=cv.onpointercancel=e=>{ptr.delete(e.pointerId);if(pinch){if(ptr.size<2)pinch=null;down=null;return}if(!down)return;cv.style.cursor='grab';
+cv.onpointerup=cv.onpointercancel=e=>{if(F4mode&&!homeOn){f4Up(e);return}ptr.delete(e.pointerId);if(pinch){if(ptr.size<2)pinch=null;down=null;return}if(!down)return;cv.style.cursor='grab';
  const[wx,wy]=s2w(e.clientX,e.clientY),x=Math.floor(wx),y=Math.floor(wy);
  if(drag){const p=drag.p;drag=null;if(moved>8)tryMove(p,x,y,true);else if(wasSel)sel=null}
  else if(pan){if(moved<6){if(sel)tryMove(sel,x,y,false);sel=null}pan=null}
