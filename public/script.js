@@ -210,7 +210,7 @@ const back=s=>`<button class=pill data-s="${s}">‹ Back</button>`,
  tile=(h,a,b,t,d)=>`<button class=tile data-s="${h}"><span class=pcs>${pc(a[0],a[1])}${pc(b[0],b[1])}</span><span class=tx><b>${t}</b><span>${d}</span></span></button>`;
 function renderHome(step){const h=$('#hin');let x='';hs.step=step;
  if(step==='main')x=`<img class=hl src="${R}images/logo-white.png" alt="Infinite Chess"><p class=tag>Chess on an endless board.</p>
-  <div class=tiles>${tile('bot',['b','n'],['w','k'],'Play the engine','Stockfish 19 + built-in engine')}${tile('hum',['w','p'],['b','p'],'Play a friend','Same device')}${tile('lan',['w','r'],['b','r'],'Play online','Two players, two devices')}</div>
+  <div class=tiles>${tile('bot',['b','n'],['w','k'],'Play the engine','Stockfish 19 + built-in engine')}${tile('hum',['w','p'],['b','p'],'Play 2 Players','Same device')}${tile('lan',['w','r'],['b','r'],'Play online','Two players, two devices')}</div>
   <div class=sub>${hasGame()?'<button class=pill data-h=resume>Resume current game</button>':''}<button class=pill data-h=set>Settings</button></div>`;
  else if(step==='bot')x=`${back('main')}<h2>Play the engine</h2><div class=lb2>You play as</div>${colors()}<div class=lb2>Difficulty</div>${optRow('lv',LVN.map(([l,e],i)=>[i,l,e]))}${times()}<button class=go data-h=startbot>Start game</button>`;
  else if(step==='hum')x=`${back('main')}<h2>Play a friend</h2>${times()}<button class=go data-h=starthum>Start game</button>`;
