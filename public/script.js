@@ -1,7 +1,7 @@
 /* Infinite Chess — script.js
    1) config + sound   2) rules engine & built-in bot   3) Stockfish   4) game, clock, online rooms   5) UI   6) board rendering */
 const $=s=>document.querySelector(s),cv=$('#cv'),g=cv.getContext('2d');
-const R='public/resources/',PN={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+const R='resources/',PN={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 
 /* ======================= CONFIG & SOUND ======================= */
 const CFG={th:0,snd:true,vol:.8,coords:true,anim:true};
