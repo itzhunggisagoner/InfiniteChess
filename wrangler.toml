@@ -1,4 +1,4 @@
-name = "infinite-chess"
+name = "infinitechess"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
