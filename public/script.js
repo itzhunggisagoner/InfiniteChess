@@ -1,7 +1,7 @@
 /* Infinite Chess — script.js
    1) config + sound   2) rules engine & built-in bot   3) Stockfish   4) game, clock, online rooms   5) UI   6) board rendering */
 const $=s=>document.querySelector(s),cv=$('#cv'),g=cv.getContext('2d');
-const R='resources/',PN={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+const R='',PN={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
 
 /* ======================= CONFIG & SOUND ======================= */
 const CFG={th:0,snd:true,vol:.8,coords:true,anim:true};
@@ -184,7 +184,7 @@ const lanClose=()=>{clearInterval(hbT);if(WS){const w=WS;WS=null;try{w.close()}c
 
 /* ======================= UI: toast, dialog, drawer ======================= */
 function toast(t){const e=$('#tt');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2600)}
-function dlg(h){$('#box').innerHTML=h;$('#dlg').classList.add('open')}const closeDlg=()=>$('#dlg').classList.remove('open');
+function dlg(h){$('#box').innerHTML=h;$('#dlg').classList.add('open');document.body.classList.add('dlgopen')}const closeDlg=()=>{$('#dlg').classList.remove('open');document.body.classList.remove('dlgopen')};
 const svg=d=>`<svg viewBox="0 0 24 24"><path d="${d}"/></svg>`;
 const GEAR='M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z';
 const ACT=[['home','Main menu','M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z',()=>openHome('main')],
@@ -193,7 +193,7 @@ const ACT=[['home','Main menu','M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 
  ['ctr','Center view','M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3',()=>fly(4,4)],
  ['snd','Sound','M11 5L6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 010 7',()=>{CFG.snd=!CFG.snd;save();updSnd();if(CFG.snd)play('move-self')},true],
  ['set','Settings',GEAR,settings],
- ['res','Resign','M5 21V4M5 4h11l-2 4 2 4H5',()=>dlg('<h2>Resign this game?</h2><div class=sg><button class=pb data-a=res>Resign</button><button data-a=x>Cancel</button></div>')]];
+ ['res','Resign','M5 21V4M5 4h11l-2 4 2 4H5',()=>dlg('<h2>Resign this game?</h2><div class=sg><button class="pb dn" data-a=res>Resign</button><button data-a=x>Cancel</button></div>')]];
 $('#dg').innerHTML=ACT.map(a=>`<button class="di${a[0]==='res'?' red':''}" data-k="${a[0]}">${svg(a[2])}<span>${a[1]}</span></button>`).join('');
 const updSnd=()=>{const b=$('.di[data-k=snd]');b.classList.toggle('off',!CFG.snd);b.querySelector('span').textContent=CFG.snd?'Sound: On':'Sound: Off'};updSnd();
 function drawer(open){const o=open===undefined?!$('#dr').classList.contains('open'):open;$('#dr').classList.toggle('open',o);$('#hb').classList.toggle('open',o);$('#hb').setAttribute('aria-expanded',o)}
@@ -292,7 +292,7 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
   for(const m of gen(P,sel.c,cap,false,sel)){const[rx,ry]=rect(m.tx,m.ty),cx=rx+s/2,cy=ry+s/2;if(cx<-s||cy<-s||cx>W+s||cy>H_+s)continue;
    const dl=Math.min(140,Math.max(Math.abs(m.tx-sel.x),Math.abs(m.ty-sel.y))*14),t=Math.max(0,Math.min(1,(now-selT-dl)/180));if(t<1)busy=true;const k=NA()?1:eb(t);
    g.beginPath();if(m.cap){g.strokeStyle='rgba(0,0,0,.28)';g.lineWidth=s*.09;g.arc(cx,cy,s*.46*k,0,7);g.stroke()}else{g.fillStyle='rgba(0,0,0,.22)';g.arc(cx,cy,s*.17*k,0,7);g.fill()}}}
- const dp=(c,t,wx,wy,k,al)=>{const[rx,ry]=rect(wx,wy);g.globalAlpha=al;g.drawImage(IM[c+t],rx-s*(k-1)/2,ry-s*(k-1)/2,s*k,s*k);g.globalAlpha=1};
+ const dp=(c,t,wx,wy,k,al)=>{const im=IM[c+t];if(!im||!im.complete||!im.naturalWidth)return;const[rx,ry]=rect(wx,wy);g.globalAlpha=al;g.drawImage(im,rx-s*(k-1)/2,ry-s*(k-1)/2,s*k,s*k);g.globalAlpha=1};
  for(const q of caps){const t=(now-q.t0)/260;if(t<0){dp(q.c,q.t,q.x,q.y,1,1);busy=true}else if(t<1){busy=true;dp(q.c,q.t,q.x,q.y,1-.5*ez(t),1-ez(t))}}caps=caps.filter(q=>now-q.t0<260);
  const mv=[];for(const p of P.m.values()){if(p.x<x0-1||p.x>x1||p.y<y0-1||p.y>y1)continue;
   if(p.an&&now-p.an.t0<p.an.d){mv.push(p);busy=true;continue}p.an=null;
@@ -301,10 +301,10 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
   dp(p.c,p.t,wx,wy,k,drag&&drag.p===p&&moved>8?.3:1)}
  for(const p of mv){const e=ez((now-p.an.t0)/p.an.d);dp(p.c,p.t,p.an.fx+(p.x-p.an.fx)*e,p.an.fy+(p.y-p.an.fy)*e,1.06,1)}
  for(const r of rips){const t=(now-r.t0)/480;if(t<1){busy=true;const[rx,ry]=rect(r.x,r.y);g.strokeStyle=`rgba(255,255,255,${.55*(1-t)})`;g.lineWidth=2.5;g.beginPath();g.arc(rx+s/2,ry+s/2,s*(.15+.45*ez(t)),0,7);g.stroke()}}rips=rips.filter(r=>now-r.t0<480);
- if(drag&&moved>8){const z=s*1.18;g.drawImage(IM[drag.p.c+drag.p.t],drag.px-z/2,drag.py-z/2-s*.1,z,z)}
+ if(drag&&moved>8){const z=s*1.18;if(IM[drag.p.c+drag.p.t].naturalWidth)g.drawImage(IM[drag.p.c+drag.p.t],drag.px-z/2,drag.py-z/2-s*.1,z,z)}
  {const vg=g.createRadialGradient(W/2,H_/2,Math.min(W,H_)*.35,W/2,H_/2,Math.hypot(W,H_)*.6);vg.addColorStop(0,'rgba(8,14,18,0)');vg.addColorStop(1,'rgba(8,14,18,.36)');g.fillStyle=vg;g.fillRect(0,0,W,H_)}
  ind=[];if(!homeOn)for(const c of'wb'){const k=P.k[c],[kx,ky]=w2s(k.x+.5,k.y+.5);if(kx>-s&&kx<W+s&&ky>-s&&ky<H_+s)continue;
   const dx=kx-W/2,dy=ky-H_/2,t=Math.min((W/2-34)/Math.abs(dx||1e-9),(H_/2-34)/Math.abs(dy||1e-9)),ex=W/2+dx*t,ey=H_/2+dy*t,ic=chk.length&&P.turn===c&&!over;
-  g.beginPath();g.arc(ex,ey,21,0,7);g.fillStyle=ic?'#e5393f':'rgba(20,27,31,.9)';g.fill();g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=2;g.stroke();g.drawImage(IM[c+'k'],ex-16,ey-16,32,32);ind.push({x:ex,y:ey,p:k})}
+  g.beginPath();g.arc(ex,ey,21,0,7);g.fillStyle=ic?'#e5393f':'rgba(20,27,31,.9)';g.fill();g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=2;g.stroke();if(IM[c+'k'].naturalWidth)g.drawImage(IM[c+'k'],ex-16,ey-16,32,32);ind.push({x:ex,y:ey,p:k})}
  return busy||!!drag}
 sfInit();newGame({mode:'2p',color:'w',lv:1});openHome('main');
