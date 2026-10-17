@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#11171a">
+<title>Infinite Chess</title>
+<link rel="icon" href="resources/images/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" crossorigin="anonymous">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="cv" tabindex="-1"></canvas>
+
+<div id="st" class="gl"><i class="tn"></i><span id="stt"></span><i class="sp"></i><em id="eng"></em></div>
+<div id="clk" class="gl" hidden>
+  <span class="ck w"><i></i><b>0:00</b></span>
+  <span class="ck b"><i></i><b>0:00</b></span>
+</div>
+
+<button id="hb" class="gl" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
+<aside id="dr" class="gl" aria-label="Game menu">
+  <div class="dg" id="dg"></div>
+  <div class="mh">Moves</div>
+  <div id="mvl"></div>
+</aside>
+
+<div id="home"><div id="hin"></div></div>
+<div id="dlg"><div id="box" class="gl"></div></div>
+<div id="tt"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
