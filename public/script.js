@@ -187,7 +187,7 @@ function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('th
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
 /* piece sprites: the folder is resources/pieces/4playeschess (older copies used 4playerchess, so both are tried).
    The SVGs only have a viewBox, which Firefox/Safari can't draw on a canvas, so a size is added when they load. */
-const F4DIRS=['4playeschess','4playerchess'],F4IM={};
+const F4DIRS=['4playerschess','4playerschess'],F4IM={};
 function f4Load(im,c,t,i){fetch(`${R}pieces/${F4DIRS[i]}/${c}/${t}.svg`).then(r=>{if(!r.ok)throw 0;return r.text()}).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b(?![^>]*\swidth=)/,'<svg width="180" height="180"'))}).catch(()=>{if(i<F4DIRS.length-1)f4Load(im,c,t,i+1)})}
 for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image();im.onload=()=>req();F4IM[c+t]=im;f4Load(im,c,t,0)}
 const F4LET={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
