@@ -51,60 +51,75 @@ function intThink(P,c,lv){let w=IW;if(!w&&globalThis.Worker){try{w=IW=new Worker
  return new Promise(res=>{const id=++iwId,ws=w;
   ws.onmessage=e=>{if(e.data.id!==id)return;const d=e.data.m,p=d&&P.get(d.fx,d.fy),m=p&&pm(P,p,d.tx,d.ty);res(m&&legal(P,m)?m:null)};
   ws.onerror=()=>{if(IW===ws)intAbort();res(think(P,c,Math.min(lv,1)))};
-  ws.postMessage({id,lv,turn:P.turn,ep:P.ep,hm:P.hm,pcs:[...P.m.values()].map(q=>({t:q.t,c:q.c,x:q.x,y:q.y,mv:q.moved}))})})}
+  ws.postMessage({id,lv,vr:VR,turn:P.turn,ep:P.ep,hm:P.hm,pcs:[...P.m.values()].map(q=>({t:q.t,c:q.c,x:q.x,y:q.y,mv:q.moved}))})})}
 
 /* ======================= GAME STATE ======================= */
 const fl=x=>x>=0&&x<8?'abcdefgh'[x]:`(${x+1})`,sq=(x,y)=>fl(x)+(y+1),RM0=matchMedia('(prefers-reduced-motion:reduce)').matches,ez=t=>1-Math.pow(1-t,3),eb=t=>{const c=1.9;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
 const TH=[['#ebecd0','#739552','Green'],['#f0d9b5','#b58863','Wood'],['#dfe5e8','#7f97a6','Slate'],['#f3e3e0','#c98a8a','Rose'],['#e9e4f1','#8672a8','Purple'],['#b8c0c8','#46525e','Night']],
- NA=()=>RM0||!CFG.anim,LVN=[['Easy','Elo 1350'],['Medium','Elo 1900'],['Hard','Elo 2500'],['Max','Strongest']],TCS=[[0,'No limit'],[3,'3 min'],[5,'5 min'],[10,'10 min']];
+ NA=()=>RM0||!CFG.anim,LVN=[['Easy','Elo 1350'],['Medium','Elo 1900'],['Hard','Elo 2500'],['Max','Strongest']],TCS=[[0,'No limit'],[60,'1 min'],[180,'3 min'],[300,'5 min'],[600,'10 min'],['c','Custom']],
+ VRS=[['std','Standard','Classic rules'],['koth','King of the Hill','King to the center'],['chk3','Three-check','Give 3 checks'],['tq','Triple Queens','Bishops become queens'],['960','Chess960','Shuffled back rank'],['atomic','Atomic','Captures explode'],['anti','Antichess','Lose all your pieces'],['rk','Racing Kings','Race to the 8th rank']],VN=Object.fromEntries(VRS.map(v=>[v[0],v[1]]));
 let P,H=[],mode='2p',me='w',lv=1,over=null,sel=null,flip=false,thinking=false,last=null,chk=[],gid=0,W,H_,ind=[],engUsed='',sfNote=false;
-let selT=0,chkT=0,caps=[],rips=[],bad=[],shake=null,clk=null,warned={w:0,b:0};const Vw={cx:4,cy:4,s:60};
+let layN=0,booms=[],selT=0,chkT=0,caps=[],rips=[],bad=[],shake=null,clk=null,warned={w:0,b:0};const Vw={cx:4,cy:4,s:60};
 function san(mv){const p=mv.p;if(mv.rk)return mv.tx>mv.fx?'O-O':'O-O-O';let s='';
  if(p.t!=='p'){s=p.t.toUpperCase();const am=[...P.m.values()].filter(q=>q!==p&&q.c===p.c&&q.t===p.t&&(m=>m&&legal(P,m))(pm(P,q,mv.tx,mv.ty)));
   if(am.length)s+=am.some(q=>q.x===p.x)?(am.some(q=>q.y===p.y)?sq(p.x,p.y):p.y+1):fl(p.x)}else if(mv.cap)s=fl(p.x);
- return s+(mv.cap?'x':'')+sq(mv.tx,mv.ty)}
-function newGame(o){gid++;sfAbort();P=setup();H=[];over=null;sel=null;last=null;thinking=false;caps=[];mode=o.mode;lv=+o.lv||0;engUsed='';
+ return s+(mv.cap?'x':'')+sq(mv.tx,mv.ty)+(VR==='atomic'&&mv.cap?'*':'')}
+function newGame(o){gid++;sfAbort();H=[];over=null;sel=null;last=null;thinking=false;caps=[];mode=o.mode;lv=+o.lv||0;engUsed='';VR=VN[o.vr]?o.vr:'std';booms=[];layN=VR==='960'?(Number.isInteger(o.lay)&&o.lay>=0&&o.lay<960?o.lay:Math.random()*960|0):0;P=setup(VR,b960(layN));
  me=o.color==='r'?(Math.random()<.5?'w':'b'):o.color;flip=mode!=='2p'&&me==='b';Vw.cx=4;Vw.cy=4;
- clk=o.tc?{w:o.tc*60000,b:o.tc*60000,last:performance.now()}:null;warned={w:0,b:0};fit();refresh();
+ const tcs=Math.max(0,Math.min(10800,+o.tc||0));clk=tcs?{w:tcs*1000,b:tcs*1000,last:performance.now()}:null;warned={w:0,b:0};fit();refresh();
+ if(VR==='960')toast('Chess960: castle by dragging your king onto your rook');if(VR==='anti')toast('Antichess: captures are mandatory');
  if(mode==='bot'&&!sfReady&&!sfNote){sfNote=true;if(sfFail)toast('Stockfish can\'t run in this browser — using the built-in engine.')}}
 function doMove(mv,anim,remote){tickClock();const now=performance.now(),d=anim&&!NA()?240:0;let s=san(mv);const mover=P.turn;
  if(mode==='lan'&&!remote&&WS)WS.send(JSON.stringify({t:'move',fx:mv.fx,fy:mv.fy,tx:mv.tx,ty:mv.ty}));
  if(mv.cap)caps.push({c:mv.cap.c,t:mv.cap.t,x:mv.cap.x,y:mv.cap.y,t0:now+d*.6});
- const u=make(P,mv);mv.p.an={fx:mv.fx,fy:mv.fy,t0:now,d};if(mv.rk)mv.rk.an={fx:mv.rfx,fy:mv.fy,t0:now,d};
+ const u=make(P,mv);if(u.ex){booms.push({x:mv.tx,y:mv.ty,t0:now+d*.6});for(const q of u.ex)caps.push({c:q.c,t:q.t,x:q.x,y:q.y,t0:now+d*.6});caps.push({c:mv.p.c,t:mv.p.t,x:mv.tx,y:mv.ty,t0:now+d*.6})}
+ mv.p.an={fx:mv.fx,fy:mv.fy,t0:now,d};if(mv.rk)mv.rk.an={fx:mv.rfx,fy:mv.fy,t0:now,d};
  if(clk)clk.last=now;
  const ck=inCheck(P,P.turn),has=gen(P,P.turn,3).length>0;if(ck){s+=has?'+':'#';chkT=now+d}
  H.push({u,s});last=mv;sel=null;
  const opp_=(mode==='bot'||mode==='lan')&&mover!==me;
  setTimeout(()=>play(ck?'move-check':mv.rk?'castle':mv.cap?'capture':opp_?'move-opponent':'move-self'),d*.7);
- const o=[...P.m.values()].filter(p=>p.t!=='k');
- if(!has)over=ck?{w:mover,r:'Checkmate!'}:{w:null,r:'Stalemate — draw'};
- else if(P.hm>=100)over={w:null,r:'Draw (50-move rule)'};else if(!o.length||o.length===1&&'nb'.includes(o[0].t))over={w:null,r:'Draw (insufficient material)'};
+ over=endChk(mover,mv,ck,has);
  refresh(!!over)}
-const nm=c=>c==='w'?'White':'Black';
+function endChk(mover,mv,ck,has){const sd=P.turn,o=[...P.m.values()].filter(p=>p.t!=='k');
+ if(VR==='koth'&&inHill(mv.p.t==='k'?mv.p:P.k[mover]))return{w:mover,r:'King of the Hill!'};
+ if(VR==='chk3'&&ck&&chks(mover)>=3)return{w:mover,r:'Third check!'};
+ if(VR==='atomic'&&!kg(P,sd))return{w:mover,r:'King exploded!'};
+ if(VR==='anti'&&!has)return{w:sd,r:[...P.m.values()].some(p=>p.c===sd)?'Stalemate — a win in Antichess':'No pieces left!'};
+ if(VR==='rk'){const wr=P.k.w.y===7,br=P.k.b.y===7;
+  if(mover==='b'&&(wr||br))return wr&&br?{w:null,r:'Both kings made it — draw'}:{w:wr?'w':'b',r:'Race won!'};
+  if(mover==='w'&&wr&&!gen(P,'b',2,false,P.k.b).some(m=>m.ty===7))return{w:'w',r:'Race won!'}}
+ if(!has)return ck?{w:mover,r:'Checkmate!'}:{w:null,r:'Stalemate — draw'};
+ if(P.hm>=100)return{w:null,r:'Draw (50-move rule)'};
+ if(VR==='koth'||VR==='atomic'||VR==='anti'||VR==='rk'?0:VR==='chk3'?!o.length:(!o.length||o.length===1&&'nb'.includes(o[0].t)))return{w:null,r:'Draw (insufficient material)'};
+ return null}
+const nm=c=>c==='w'?'White':'Black',chks=c=>H.filter((h,i)=>i%2===(c==='w'?0:1)&&/[+#]$/.test(h.s)).length;
 function stt(){const st=$('#st');if(!P)return;st.classList.toggle('ck',!!chk.length&&!over);st.classList.toggle('th',thinking);
  $('#stt').textContent=over?over.r+(over.w?' — '+nm(over.w)+' wins':''):thinking?'Engine is thinking…':(mode==='lan'?(P.turn===me?'Your move':'Opponent\'s move'):nm(P.turn)+' to move')+(chk.length?' — CHECK!':'');
+ if(VR!=='std'&&!over)$('#stt').textContent+=' · '+(VR==='chk3'?`Checks ${chks('w')}/3 – ${chks('b')}/3`:VR==='960'?`Chess960 #${layN}`:VN[VR]);
  $('.tn').style.background=over?'transparent':P.turn==='w'?'#fff':'#222';
- const e=$('#eng');e.textContent=mode!=='bot'?'':engUsed==='sf'?'Stockfish 19':engUsed==='int'?'Built-in engine':sfReady?'Stockfish 19':sfFail?'Built-in engine':'Loading Stockfish…';e.style.display=mode==='bot'?'':'none';drawClock()}
+ const e=$('#eng');e.textContent=mode!=='bot'?'':engUsed==='sf'?'Stockfish 19':engUsed==='int'||VR!=='std'&&VR!=='tq'?'Built-in engine':sfReady?'Stockfish 19':sfFail?'Built-in engine':'Loading Stockfish…';e.style.display=mode==='bot'?'':'none';drawClock()}
 function refresh(matePlayed){chk=[];if(inCheck(P,P.turn)){const k=P.k[P.turn];chk=[...P.m.values()].filter(q=>q.c!==P.turn&&atk(P,q,k.x,k.y))}
  const mv=$('#mvl');mv.innerHTML=H.length?'':'<div class=e>No moves yet.</div>';for(let i=0;i<H.length;i+=2)mv.insertAdjacentHTML('beforeend',`<div class=r><b>${i/2+1}.</b><span>${H[i].s}</span><span>${H[i+1]?H[i+1].s:''}</span></div>`);
  if(mv.lastElementChild&&mv.lastElementChild.className==='r')mv.lastElementChild.className='r n';mv.scrollTop=1e9;stt();req();const id=gid;
  if(over){if(!over.s){over.s=1;const gi=gid;setTimeout(()=>gi===gid&&play('game-end'),matePlayed?650:0)}setTimeout(()=>id===gid&&dlg(`<h2>${over.r}</h2><p>${over.w?(mode==='2p'?nm(over.w):over.w===me?'You':mode==='lan'?'Your opponent':'The engine')+(mode==='2p'||over.w!==me?' wins':' win')+' this game.':'The game ended in a draw.'}</p><div class=sg><button class=pb data-a=new>New game</button><button data-a=x>View board</button></div>`),900);return}
  if(mode==='bot'&&P.turn!==me&&!thinking)botTurn(id)}
 async function botTurn(id){thinking=true;stt();let m=null;
- if(sfReady&&fits(P)){m=await sfThink(P,P.turn,lv);if(m)engUsed='sf'}
+ if(sfReady&&fits(P)&&(VR==='std'||VR==='tq')){m=await sfThink(P,P.turn,lv);if(m)engUsed='sf'}
  if(!m){m=await intThink(P,P.turn,Math.min(lv,2));if(id!==gid)return;engUsed='int'}
  if(id!==gid)return;thinking=false;if(m)doMove(m,true);else refresh()}
 function nope(p,x,y,msg){play('illegal');bad.push({x,y,t0:performance.now()});if(msg){toast(msg);shake={p,t0:performance.now()}}req()}
 function tryMove(p,x,y,byDrag){if(x===p.x&&y===p.y)return;const m=pm(P,p,x,y);if(!m)return nope(p,x,y);
- if(!legal(P,m))return nope(p,x,y,'That move would leave your king in check');doMove(m,!byDrag)}
+ if(!legal(P,m))return nope(p,x,y,VR==='anti'?'You must capture when you can':VR==='rk'?'Racing Kings: no check — given or received':VR==='atomic'?'Illegal: your king would be in check or exploded':'That move would leave your king in check');doMove(m,!byDrag)}
 const canPlay=p=>!over&&!thinking&&p.c===P.turn&&(mode==='2p'||p.c===me);
 function undo(){if(!H.length||thinking||over&&mode==='lan')return;if(mode==='lan'||clk)return toast('Undo isn\'t available in online games or with a clock');
  const n=mode==='bot'&&P.turn===me&&H.length>=2?2:1;sfAbort();for(let i=0;i<n;i++)unmake(P,H.pop().u);
- for(const p of P.m.values())p.an=null;caps=[];last=H.length?H[H.length-1].u.mv:null;over=null;sel=null;gid++;refresh()}
+ for(const p of P.m.values())p.an=null;caps=[];booms=[];last=H.length?H[H.length-1].u.mv:null;over=null;sel=null;gid++;refresh()}
 function resign(){if(over)return;const c=mode==='2p'?P.turn:me;if(mode==='lan'&&WS)WS.send(JSON.stringify({t:'resign'}));over={w:opp(c),r:'Resignation'};refresh()}
 
 /* ======================= CLOCK ======================= */
-const fmt=ms=>{ms=Math.max(0,ms);return ms<10000&&ms>0?(ms/1000).toFixed(1):Math.floor(Math.ceil(ms/1000)/60)+':'+String(Math.ceil(ms/1000)%60).padStart(2,'0')};
+const fmt=ms=>{ms=Math.max(0,ms);if(ms<10000&&ms>0)return(ms/1000).toFixed(1);const t=Math.ceil(ms/1000),h=Math.floor(t/3600),m=Math.floor(t/60)%60,sc=String(t%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+sc:Math.floor(t/60)+':'+sc};
+function tcSec(){if(hs.tc!=='c')return+hs.tc;const t=Math.min(180,Math.max(0,hs.cm|0))*60+Math.min(59,Math.max(0,hs.cs|0));if(t<1){toast('Enter a time greater than 0:00');return null}return Math.min(t,10800)}
 function tickClock(){if(!clk||!P)return;const n=performance.now(),d=n-clk.last;clk.last=n;if(over||homeOn)return;
  clk[P.turn]-=d;const c=P.turn;
  if(clk[c]<=10000&&clk[c]>0&&!warned[c]&&(mode!=='bot'||c===me)){warned[c]=1;play('tensecondsremain')}
@@ -113,7 +128,7 @@ function drawClock(){const e=$('#clk');e.hidden=!clk||homeOn;if(!clk)return;for(
 setInterval(tickClock,100);
 
 /* ======================= ONLINE ROOMS ======================= */
-let WS=null,hbT=0,lan={color:'w',tc:0};
+let WS=null,hbT=0,lan={color:'w',tc:0,vr:'std',lay:0};
 function wsConnect(cb){let done=0;const fin=w=>{if(!done){done=1;cb(w)}};let ws;
  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){return fin(null)}
  const to=setTimeout(()=>{try{ws.close()}catch(e){}fin(null)},3500);
@@ -122,8 +137,8 @@ function wsConnect(cb){let done=0;const fin=w=>{if(!done){done=1;cb(w)}};let ws;
  ws.onclose=()=>{clearInterval(hbT);if(WS===ws){WS=null;if(homeOn&&(hs.step==='lanw'||hs.step==='lanwj')){toast('Connection lost');renderHome('lan');return}if(mode==='lan'&&!over&&!homeOn)toast('Connection lost')}}}
 function lanMsg(m){
  if(m.t==='created'){hs.code=m.room;renderHome('lanw')}
- else if(m.t==='peer'){WS.send(JSON.stringify({t:'start',color:opp(lan.color),tc:lan.tc}));startGame({mode:'lan',color:lan.color,tc:lan.tc})}
- else if(m.t==='start')startGame({mode:'lan',color:m.color,tc:m.tc})
+ else if(m.t==='peer'){WS.send(JSON.stringify({t:'start',color:opp(lan.color),tc:lan.tc,vr:lan.vr,lay:lan.lay}));startGame({mode:'lan',color:lan.color,tc:lan.tc,vr:lan.vr,lay:lan.lay})}
+ else if(m.t==='start')startGame({mode:'lan',color:m.color==='b'?'b':'w',tc:+m.tc||0,vr:m.vr,lay:m.lay})
  else if(m.t==='joined')renderHome('lanwj')
  else if(m.t==='err'){const e=$('#lerr');if(e)e.textContent=m.m}
  else if(m.t==='move'&&mode==='lan'&&!over){const p=P.get(m.fx,m.fy),mv=p&&p.c===P.turn&&p.c!==me&&pm(P,p,m.tx,m.ty);if(mv&&legal(P,mv))doMove(mv,true,true)}
@@ -151,22 +166,23 @@ $('#hb').onclick=()=>drawer();
 $('#dg').onclick=e=>{const b=e.target.closest('.di');if(!b)return;const a=ACT.find(x=>x[0]===b.dataset.k);a[3]();if(!a[4])drawer(false)};
 
 /* ======================= UI: lobby ======================= */
-let homeOn=false,saveV=null,hs={color:'w',lv:1,tc:0,code:''};
+let homeOn=false,saveV=null,hs={color:'w',lv:1,tc:0,code:'',vr:'std',cm:5,cs:0};
 const hasGame=()=>H.length>0&&!over,pu=(c,t)=>`${R}pieces/${c==='w'?'white':'black'}_${PN[t]}.png`,pc=(c,t)=>`<img src="${pu(c,t)}" alt="">`;
 const back=s=>`<button class=pill data-s="${s}">‹ Back</button>`,
- optRow=(key,arr)=>`<div class=opts>${arr.map(([v,l,x,i])=>`<button class="opt${String(hs[key])===String(v)?' on':''}" data-k="${key}" data-v="${v}">${i||''}<span>${l}</span>${x?`<small>${x}</small>`:''}</button>`).join('')}</div>`,
+ optRow=(key,arr)=>`<div class="opts${key==='tc'?' w':key==='vr'?' w v':''}">${arr.map(([v,l,x,i])=>`<button class="opt${String(hs[key])===String(v)?' on':''}" data-k="${key}" data-v="${v}">${i||''}<span>${l}</span>${x?`<small>${x}</small>`:''}</button>`).join('')}</div>`,
  colors=()=>optRow('color',[['w','White','',pc('w','k')],['b','Black','',pc('b','k')],['r','Random','',pc('w','q')]]),
- times=()=>`<div class=lb2>Time per side</div>${optRow('tc',TCS)}`,
+ times=()=>`<div class=lb2>Time per side</div>${optRow('tc',TCS)}<div class="cust${hs.tc==='c'?' on':''}" id=cust><input id=cm type=number inputmode=numeric min=0 max=180 value=${hs.cm} aria-label=Minutes><b>:</b><input id=cs type=number inputmode=numeric min=0 max=59 value=${String(hs.cs).padStart(2,'0')} aria-label=Seconds><small>min : sec</small></div>`,
+ vrs=()=>`<div class=lb2>Variant</div>${optRow('vr',VRS)}`,
  tile=(h,a,b,t,d)=>`<button class=tile data-s="${h}"><span class=pcs>${pc(a[0],a[1])}${pc(b[0],b[1])}</span><span class=tx><b>${t}</b><span>${d}</span></span></button>`;
 function renderHome(step){const h=$('#hin');let x='';hs.step=step;
  if(step==='main')x=`<img class=hl src="${R}images/logo-white.png" alt="Infinite Chess"><p class=tag>Chess on an endless board.</p>
   <div class=tiles>${tile('bot',['b','n'],['w','k'],'Play the engine','Stockfish 19 + built-in engine')}${tile('hum',['w','p'],['b','p'],'Play 2 Players','Same device')}${tile('lan',['w','r'],['b','r'],'Play online','Two players, two devices')}</div>
   <div class=sub>${hasGame()?'<button class=pill data-h=resume>Resume current game</button>':''}<button class=pill data-h=set>Settings</button></div>`;
- else if(step==='bot')x=`${back('main')}<h2>Play the engine</h2><div class=lb2>You play as</div>${colors()}<div class=lb2>Difficulty</div>${optRow('lv',LVN.map(([l,e],i)=>[i,l,e]))}${times()}<button class=go data-h=startbot>Start game</button>`;
- else if(step==='hum')x=`${back('main')}<h2>Play a friend</h2>${times()}<button class=go data-h=starthum>Start game</button>`;
+ else if(step==='bot')x=`${back('main')}<h2>Play the engine</h2><div class=lb2>You play as</div>${colors()}<div class=lb2>Difficulty</div>${optRow('lv',LVN.map(([l,e],i)=>[i,l,e]))}${vrs()}${times()}<button class=go data-h=startbot>Start game</button>`;
+ else if(step==='hum')x=`${back('main')}<h2>Play a friend</h2>${vrs()}${times()}<button class=go data-h=starthum>Start game</button>`;
  else if(step==='lan')x=`${back('main')}<h2>Play online</h2><p class=tag>Create a room and share the 4-digit code with a friend — or enter their code to join.</p>
   <div class="tiles two">${tile('lanc',['w','k'],['b','k'],'Create room','Get a 4-digit code')}${tile('lanj',['w','n'],['b','n'],'Join room','Enter a friend\'s code')}</div>`;
- else if(step==='lanc')x=`${back('lan')}<h2>Create room</h2><div class=lb2>You play as</div>${colors()}${times()}<button class=go data-h=create>Create room</button><p class=err id=lerr></p>`;
+ else if(step==='lanc')x=`${back('lan')}<h2>Create room</h2><div class=lb2>You play as</div>${colors()}${vrs()}${times()}<button class=go data-h=create>Create room</button><p class=err id=lerr></p>`;
  else if(step==='lanw')x=`<h2>Your room code</h2><div class=code>${hs.code}</div><p class=tag>Your friend opens <b>${location.origin}</b>, picks Play online → Join room and enters this code.</p><p class=tag><i class=sp></i>Waiting for opponent…</p><button class=pill data-h=cancel>Cancel room</button>`;
  else if(step==='lanwj')x=`<h2>Joined the room</h2><p class=tag><i class=sp></i>Waiting for the host to start the game…</p><button class=pill data-h=cancel>Leave room</button>`;
  else if(step==='lanj')x=`${back('lan')}<h2>Join room</h2><input class=ci id=code inputmode=numeric maxlength=4 placeholder="0000" autocomplete=off><button class=go data-h=join>Join room</button><p class=err id=lerr></p>`;
@@ -177,13 +193,15 @@ function startGame(o){closeDlg();closeHome(false);if(o.mode!=='lan')lanClose();n
 function lanFail(){const e=$('#lerr');const t='Couldn\'t reach the game server. Please try again in a moment.';if(e)e.textContent=t;toast(t)}
 $('#home').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
  if(d.s){if(hs.step==='lanw'||hs.step==='lanwj')lanClose();renderHome(d.s)}
- else if(d.k){hs[d.k]=d.v;b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))}
- else if(d.h==='startbot')startGame({mode:'bot',color:hs.color,lv:hs.lv,tc:+hs.tc});
- else if(d.h==='starthum')startGame({mode:'2p',color:'w',tc:+hs.tc});
+ else if(d.k){hs[d.k]=d.v;b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));if(d.k==='tc'){const c=$('#cust');c&&c.classList.toggle('on',d.v==='c')}}
+ else if(d.h==='startbot'){const tc=tcSec();if(tc!==null)startGame({mode:'bot',color:hs.color,lv:hs.lv,tc,vr:hs.vr})}
+ else if(d.h==='starthum'){const tc=tcSec();if(tc!==null)startGame({mode:'2p',color:'w',tc,vr:hs.vr})}
  else if(d.h==='set')settings();else if(d.h==='resume')closeHome(true);
- else if(d.h==='create'){lan={color:hs.color==='r'?(Math.random()<.5?'w':'b'):hs.color,tc:+hs.tc};lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'create'})):lanFail())}
+ else if(d.h==='create'){const tc=tcSec();if(tc===null)return;lan={color:hs.color==='r'?(Math.random()<.5?'w':'b'):hs.color,tc,vr:hs.vr,lay:hs.vr==='960'?Math.random()*960|0:0};lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'create'})):lanFail())}
  else if(d.h==='join'){const c=($('#code').value||'').trim();if(c.length<4)return($('#lerr').textContent='Enter the full 4-digit code.');lanClose();wsConnect(w=>w?w.send(JSON.stringify({t:'join',room:c})):lanFail())}
  else if(d.h==='cancel'){lanClose();renderHome('lan')}};
+$('#home').addEventListener('input',e=>{const i=e.target.id;if(i==='cm')hs.cm=Math.min(180,Math.max(0,parseInt(e.target.value)||0));else if(i==='cs')hs.cs=Math.min(59,Math.max(0,parseInt(e.target.value)||0))});
+$('#home').addEventListener('focusout',e=>{const i=e.target.id;if(i==='cm')e.target.value=hs.cm;else if(i==='cs')e.target.value=String(hs.cs).padStart(2,'0')});
 $('#home').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='code')$('#home [data-h=join]').click()});
 
 /* ======================= UI: settings ======================= */
@@ -231,6 +249,8 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
  g.fillStyle='#11171a';g.fillRect(0,0,W,H_);
  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const[rx,ry]=rect(x,y);g.fillStyle=(x+y)&1?LT:DK;g.fillRect(rx,ry,s+.7,s+.7)}
  const hl=(x,y,col)=>{const[rx,ry]=rect(x,y);g.fillStyle=col;g.fillRect(rx,ry,s,s)};
+ if(VR==='rk')for(let x=x0;x<=x1;x++)hl(x,7,'rgba(255,196,0,.2)');
+ if(VR==='koth')for(const[hx,hy]of[[3,3],[4,3],[3,4],[4,4]])hl(hx,hy,'rgba(255,196,0,.22)');
  if(last){hl(last.fx,last.fy,'rgba(255,214,64,.42)');hl(last.tx,last.ty,'rgba(255,214,64,.5)')}
  if(sel){const e=Math.min(1,(now-selT)/160);if(e<1)busy=true;hl(sel.x,sel.y,`rgba(255,214,64,${.62*ez(e)})`)}
  for(const b of bad){const t=(now-b.t0)/520;if(t<1){busy=true;const k=t<.5?1:2*(1-t),[rx,ry]=rect(b.x,b.y);g.fillStyle=`rgba(229,57,64,${.78*k*(.6+.4*Math.abs(Math.cos(t*Math.PI*3)))})`;g.fillRect(rx,ry,s,s)}}bad=bad.filter(b=>now-b.t0<520);
@@ -253,10 +273,12 @@ function draw(now){if(!P)return false;if(homeOn&&saveV){const t=now/1000;Vw.s=Ma
   if(shake&&shake.p===p){const t=(now-shake.t0)/350;if(t<1){wx+=Math.sin(t*Math.PI*7)*.09*(1-t);busy=true}else shake=null}
   dp(p.c,p.t,wx,wy,k,drag&&drag.p===p&&moved>8?.3:1)}
  for(const p of mv){const e=ez((now-p.an.t0)/p.an.d);dp(p.c,p.t,p.an.fx+(p.x-p.an.fx)*e,p.an.fy+(p.y-p.an.fy)*e,1.06,1)}
+ for(const b of booms){const t=(now-b.t0)/650;if(t<0){busy=true;continue}if(t<1){busy=true;const[rx,ry]=rect(b.x,b.y),cx=rx+s/2,cy=ry+s/2,r=s*(.7+1.5*ez(t)),gr=g.createRadialGradient(cx,cy,0,cx,cy,r);
+  gr.addColorStop(0,`rgba(255,235,150,${.95*(1-t)})`);gr.addColorStop(.45,`rgba(255,120,30,${.65*(1-t)})`);gr.addColorStop(1,'rgba(255,60,0,0)');g.fillStyle=gr;g.beginPath();g.arc(cx,cy,r,0,7);g.fill()}}booms=booms.filter(b=>now-b.t0<650);
  for(const r of rips){const t=(now-r.t0)/480;if(t<1){busy=true;const[rx,ry]=rect(r.x,r.y);g.strokeStyle=`rgba(255,255,255,${.55*(1-t)})`;g.lineWidth=2.5;g.beginPath();g.arc(rx+s/2,ry+s/2,s*(.15+.45*ez(t)),0,7);g.stroke()}}rips=rips.filter(r=>now-r.t0<480);
  if(drag&&moved>8){const z=s*1.18;if(IM[drag.p.c+drag.p.t].naturalWidth)g.drawImage(IM[drag.p.c+drag.p.t],drag.px-z/2,drag.py-z/2-s*.1,z,z)}
  {const vg=g.createRadialGradient(W/2,H_/2,Math.min(W,H_)*.35,W/2,H_/2,Math.hypot(W,H_)*.6);vg.addColorStop(0,'rgba(8,14,18,0)');vg.addColorStop(1,'rgba(8,14,18,.36)');g.fillStyle=vg;g.fillRect(0,0,W,H_)}
- ind=[];if(!homeOn)for(const c of'wb'){const k=P.k[c],[kx,ky]=w2s(k.x+.5,k.y+.5);if(kx>-s&&kx<W+s&&ky>-s&&ky<H_+s)continue;
+ ind=[];if(!homeOn)for(const c of'wb'){const k=kg(P,c);if(!k)continue;const[kx,ky]=w2s(k.x+.5,k.y+.5);if(kx>-s&&kx<W+s&&ky>-s&&ky<H_+s)continue;
   const dx=kx-W/2,dy=ky-H_/2,t=Math.min((W/2-34)/Math.abs(dx||1e-9),(H_/2-34)/Math.abs(dy||1e-9)),ex=W/2+dx*t,ey=H_/2+dy*t,ic=chk.length&&P.turn===c&&!over;
   g.beginPath();g.arc(ex,ey,21,0,7);g.fillStyle=ic?'#e5393f':'rgba(20,27,31,.9)';g.fill();g.strokeStyle='rgba(255,255,255,.85)';g.lineWidth=2;g.stroke();if(IM[c+'k'].naturalWidth)g.drawImage(IM[c+'k'],ex-16,ey-16,32,32);ind.push({x:ex,y:ey,p:k})}
  return busy||!!drag}

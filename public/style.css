@@ -107,3 +107,11 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
   .tile img{height:52px}.tile b{margin:0;font-size:18px}.tile .pcs{flex:none}.tile .tx{gap:2px}
   #st em{display:none}.code{font-size:56px}.tag{font-size:15px}#hin h2{font-size:26px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* variants + custom time */
+.opts.w{flex-wrap:wrap}.opts.w .opt{flex:1 1 calc(33% - 10px)}.opts.w .opt small{text-align:center}
+.cust{display:none;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:-6px}.cust.on{display:flex}
+.cust input{width:84px;padding:12px 6px;border-radius:16px;border:1px solid var(--gb);background:var(--g1);backdrop-filter:var(--bl);-webkit-backdrop-filter:var(--bl);color:inherit;text-align:center;font:700 26px inherit;font-family:inherit;outline:0;-moz-appearance:textfield}
+.cust input::-webkit-outer-spin-button,.cust input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.cust input:focus{border-color:var(--acb);background:var(--g2)}
+.cust b{font-size:26px}.cust small{opacity:.6;font-size:12px}
+.opts.v .opt{flex:1 1 calc(50% - 10px)}
