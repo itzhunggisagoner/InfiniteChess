@@ -165,3 +165,6 @@ body.f4 .di[data-k=undo],body.f4 .di[data-k=flip],body.f4 .di[data-k=ctr],body.n
 .mini.dn{background:rgba(229,72,77,.3);border-color:var(--rd)}
 .go:disabled{opacity:.4;pointer-events:none}
 .cbd{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#e5484d;color:#fff;font-size:11px;font-weight:700}
+
+.chat-form button{flex:none;padding:12px 18px;border-radius:12px;border:1px solid var(--acb);background:var(--acg);color:#eafff8;font:inherit;font-weight:700;cursor:pointer}
+.chat-form button:active{transform:scale(.95)}

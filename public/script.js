@@ -185,7 +185,9 @@ function f4UI(){if(!F4)return;const c=F4.cur,st=$('#st');st.classList.remove('ck
  p.innerHTML=F4COL.map(k=>`<div class="pr${k===c&&!F4.over?' act':''}${F4.alive.includes(k)?'':' out'}" data-c="${k}"><i style="background:${F4HEX[k]}"></i><span class=pn style="color:${F4HEX[k]}">${esc(F4.names[k])}${k===F4.me?' •':''}</span>${F4.bots.has(k)?'<em>bot</em>':''}<b></b></div>`).join('');
  f4Clocks();
  const mv=$('#mvl');mv.innerHTML=F4.hist.length?F4.hist.slice(-120).map(h=>`<div class=r><b style="color:${F4HEX[h.c]}">●</b><span>${esc(F4.names[h.c])}</span><span>${h.s}</span></div>`).join(''):'<div class=e>No moves yet.</div>';mv.scrollTop=1e9}
-const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image();im.src=`${R}pieces/4playerchess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im}
+/* SVGs only have a viewBox (no width/height) which Firefox/Safari refuse to draw on a canvas, so give them an explicit size */
+const F4IM={};for(const c of F4COL)for(const t of['king','queen','rook','bishop','knight','pawn']){const im=new Image(),u=`${R}pieces/4playerchess/${c}/${t}.svg`;im.onload=()=>req();F4IM[c+t]=im;
+ fetch(u).then(r=>r.text()).then(x=>{im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(x.replace(/<svg\b/,'<svg width="180" height="180"'))}).catch(()=>{im.src=u})}
 function f4Draw(){const cw=Math.min((W-24)/14,(H_-100)/14),left=(W-cw*14)/2,top=(H_-cw*14)/2;F4cell=cw;F4origin=[left,top];g.fillStyle='#11171a';g.fillRect(0,0,W,H_);if(!F4)return;
  const L=F4.last;
  for(let vy=0;vy<14;vy++)for(let vx=0;vx<14;vx++){const[x,y]=f4u(vx,vy);if(!F4valid(x,y))continue;const px=left+vx*cw,py=top+(13-vy)*cw;
@@ -193,7 +195,7 @@ function f4Draw(){const cw=Math.min((W-24)/14,(H_-100)/14),left=(W-cw*14)/2,top=
   if(L&&(x===L.fx&&y===L.fy||x===L.tx&&y===L.ty)){g.fillStyle='rgba(255,214,64,.42)';g.fillRect(px,py,cw,cw)}
   if(F4selected&&F4selected.x===x&&F4selected.y===y){g.fillStyle='#f3d45b99';g.fillRect(px,py,cw,cw)}
   const lm=F4legal.find(m=>m.x===x&&m.y===y);if(lm){g.fillStyle=lm.cap?'#df515b99':'#17251e66';g.beginPath();g.arc(px+cw/2,py+cw/2,cw*(lm.cap?.42:.16),0,7);g.fill()}
-  const p=f4At(x,y);if(p){const im=F4IM[p.c+p.t];if(im&&im.complete)g.drawImage(im,px+cw*.05,py+cw*.05,cw*.9,cw*.9)}}}
+  const p=f4At(x,y);if(p){const im=F4IM[p.c+p.t];if(im&&im.complete&&im.naturalWidth)g.drawImage(im,px+cw*.05,py+cw*.05,cw*.9,cw*.9)}}}
 function f4Pointer(e){if(!F4mode||homeOn||!F4)return false;const[left,top]=F4origin,cw=F4cell,vx=Math.floor((e.clientX-left)/cw),vy=13-Math.floor((e.clientY-top)/cw);
  if(vx<0||vx>13||vy<0||vy>13)return true;const[x,y]=f4u(vx,vy);if(!F4valid(x,y))return true;const p=f4At(x,y),
  mine=q=>q&&!F4.over&&q.c===F4.cur&&(F4.online?q.c===F4.me:!F4.bots.has(q.c));
